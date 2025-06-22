@@ -53,12 +53,12 @@ async fn main(spawner: Spawner) {
     let transport = BleConnector::new(&wifi_init, peripherals.BT);
     let ble_controller = ExternalController::<_, 20>::new(transport);
     // Initialize I2C and sensor
-    let sda = peripherals.GPIO0;
-    let scl = peripherals.GPIO1;
+    let sda = peripherals.GPIO22;
+    let scl = peripherals.GPIO23;
 
     // Configure GPIO16 as interrupt input with pull-up
     let motion_int: Input<'_> = Input::new(
-        peripherals.GPIO2,
+        peripherals.GPIO0,
         InputConfig::default().with_pull(Pull::Up),
     );
 

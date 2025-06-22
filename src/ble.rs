@@ -23,10 +23,10 @@ struct Server {
 }
 #[gatt_service(uuid = "12345678-1234-5678-1234-56789abcdef0")]
 struct MyService {
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef1", read, notify, value =Vec::from_slice(&[0, 0, 0, 0, 0, 0]).unwrap())]
-    sensor_accel: Vec<u8, 60>,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef2", read, notify, value =Vec::from_slice(&[0, 0, 0, 0, 0, 0]).unwrap())]
-    sensor_gyro: Vec<u8, 60>,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef1", read, notify, value =Vec::from_slice(&[0;10]).unwrap())]
+    sensor_accel: Vec<u8, 100>,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef2", read, notify, value =Vec::from_slice(&[0;10]).unwrap())]
+    sensor_gyro: Vec<u8, 100>,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_READ_INTERVAL)]
     read_interval: u64,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef4", write, read, value = DEFAULT_READ_DURATION)]
@@ -196,9 +196,9 @@ async fn custom_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'
     let mut tick: u16 = 0;
     let sensor_accel = &server.imu_service.sensor_accel;
     let sensor_gyro = &server.imu_service.sensor_gyro;
-    let mut buf: Vec<u8, 12> = Vec::new();
-    let mut accel_batch: Vec<u8, 60> = Vec::new();
-    let mut gyro_batch: Vec<u8, 60> = Vec::new();
+    let mut buf: Vec<u8, 16> = Vec::new();
+    let mut accel_batch: Vec<u8, 100> = Vec::new();
+    let mut gyro_batch: Vec<u8, 100> = Vec::new();
     loop {
         tick = tick.wrapping_add(1);
         let mut count = 0;
@@ -211,17 +211,21 @@ async fn custom_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'
         data.write_to_vec(&mut buf);
         info!("[custom_task] notifying result");
 
-        // Convert slices to Vec<u8, 6> for notify
+        //timestamp is at 12..16, accel data at 0..6, gyro data at 6..12
+        accel_batch.extend_from_slice(&buf[12..16]).ok();
         accel_batch.extend_from_slice(&buf[0..6]).ok();
+        gyro_batch.extend_from_slice(&buf[12..16]).ok();
         gyro_batch.extend_from_slice(&buf[6..12]).ok();
         count += 1;
         while count < 10 {
-            let mut buf: Vec<u8, 12> = Vec::new();
             match SENSOR_CHANNEL.try_receive() {
                 Ok(data) => {
                     buf.clear();
                     data.write_to_vec(&mut buf);
+                    //timestamp is at 12..16, accel data at 0..6, gyro data at 6..12
+                    accel_batch.extend_from_slice(&buf[12..16]).ok();
                     accel_batch.extend_from_slice(&buf[0..6]).ok();
+                    gyro_batch.extend_from_slice(&buf[12..16]).ok();
                     gyro_batch.extend_from_slice(&buf[6..12]).ok();
                     count += 1;
                 }

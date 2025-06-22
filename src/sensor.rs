@@ -1,4 +1,4 @@
-use defmt::{debug, error, info, Debug2Format};
+use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_time::{Delay, Duration, Instant, Timer};
 use esp_hal::{gpio::Input, i2c::master::I2c, Async};
 use mpu6050_dmp::{
@@ -7,7 +7,7 @@ use mpu6050_dmp::{
 };
 
 use crate::shared::{
-    SensorData, BLINK_INTERVAL_MS, READ_DURATION_S, READ_INTERVAL_MS, SENSOR_CHANNEL,
+    SensorData, BLINK_INTERVAL_MS, EPOCH, READ_DURATION_S, READ_INTERVAL_MS, SENSOR_CHANNEL,
 };
 pub type Sensor<'a> = Mpu6050<I2c<'a, Async>>;
 
@@ -46,7 +46,10 @@ pub async fn configure_sensor<'a>(sensor: &mut Mpu6050<I2c<'a, Async>>, delay: &
         mpu6050_dmp::gyro::GyroFullScale::Deg2000,
         mpu6050_dmp::calibration::ReferenceGravity::ZN,
     );
-
+    sensor
+        .set_accel_calibration(&Accel::new(0, 0, 0))
+        .await
+        .unwrap();
     info!("Calibrating Sensor");
     sensor.calibrate(delay, &calibration_params).await.unwrap();
     info!("Sensor Calibrated");
@@ -80,7 +83,9 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
 
         // Loop for 10 seconds
         let duration = *READ_DURATION_S.lock().await as u64;
-        info!("duration:{}", duration);
+        // Reset the EPOCH to current time
+        *EPOCH.lock().await = start.as_millis() as u32;
+        info!("Reading sensor data for {} seconds", duration);
         while Instant::now() - start < Duration::from_secs(duration) {
             // Read current sensor data
             let loop_start = Instant::now();
@@ -90,30 +95,28 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
             }
 
             // // Monitor motion while it continues
-            let motion_check = sensor.check_motion().await;
-            match motion_check {
-                Ok(result) => {
-                    if result.0 {
-                        start = Instant::now();
-                    }
-                }
-                Err(e) => {
-                    error!("Error when reading motion_check: {}", e);
-                }
+            if motion_int.is_low() {
+                start = Instant::now();
+                info!("Motion detected, resetting start time.");
             }
+
+            //measure how long the loop took so far.
             let elapsed = Instant::now() - loop_start;
             let interval = Duration::from_millis(*READ_INTERVAL_MS.lock().await as u64);
-
+            // If the loop took less time than the interval, wait for the remaining time
             if elapsed < interval {
                 Timer::after(interval - elapsed).await;
             }
+            if elapsed > interval {
+                warn!(
+                    "sensor loop interval exceeded Read_interval: {}",
+                    elapsed.as_micros()
+                );
+            }
         }
-        // Wait for INT to go high (motion completely stopped)
-        // before looking for new motion
+
         info!("No more motion detected");
         *BLINK_INTERVAL_MS.lock().await = 1000;
-
-        motion_int.wait_for_high().await;
     }
 }
 
@@ -125,14 +128,15 @@ async fn report_motion<'a>(accel: Accel, gyro: Gyro) {
         gyro_x: gyro.x(),
         gyro_y: gyro.y(),
         gyro_z: gyro.z(),
+        timestamp_ms: embassy_time::Instant::now().as_millis() as u32 - *EPOCH.lock().await,
     };
     if SENSOR_CHANNEL.is_full() {
         //remove oldest data
         debug!("SENSOR_CHANNEL is full, popping oldest data");
         SENSOR_CHANNEL.receive().await;
     }
-    let send = SENSOR_CHANNEL.try_send(data);
-    if let Err(send_error) = send {
+    let send_result = SENSOR_CHANNEL.try_send(data);
+    if let Err(send_error) = send_result {
         error!("Send error : {:?}", Debug2Format(&send_error));
     };
 }

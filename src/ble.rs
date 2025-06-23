@@ -6,7 +6,7 @@ use heapless::Vec;
 use trouble_host::prelude::*;
 
 use crate::shared::{
-    ToBytes, DEFAULT_READ_DURATION, DEFAULT_READ_INTERVAL, READ_DURATION_S, READ_INTERVAL_MS,
+    ToBytes, DEFAULT_READ_DURATION_S, DEFAULT_READ_INTERVAL_MS, READ_DURATION_S, READ_INTERVAL_MS,
     SENSOR_CHANNEL,
 };
 
@@ -27,9 +27,9 @@ struct MyService {
     sensor_accel: Vec<u8, 100>,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef2", read, notify, value =Vec::from_slice(&[0;10]).unwrap())]
     sensor_gyro: Vec<u8, 100>,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_READ_INTERVAL)]
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_READ_INTERVAL_MS)]
     read_interval: u64,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef4", write, read, value = DEFAULT_READ_DURATION)]
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef4", write, read, value = DEFAULT_READ_DURATION_S)]
     read_duration: u16,
 }
 

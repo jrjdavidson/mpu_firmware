@@ -49,12 +49,13 @@ impl ToBytes for SensorData {
         vec.extend_from_slice(&self.timestamp_ms.to_le_bytes()).ok();
     }
 }
-pub const DEFAULT_READ_INTERVAL: u64 = 30;
-pub const DEFAULT_READ_DURATION: u16 = 20;
+pub const DEFAULT_READ_INTERVAL_MS: u64 = 10;
+pub const DEFAULT_READ_DURATION_S: u16 = 5;
 
 pub static SENSOR_CHANNEL: Channel<CriticalSectionRawMutex, SensorData, 100> = Channel::new();
 pub static BLINK_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u32> = Mutex::new(100);
 pub static READ_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =
-    Mutex::new(DEFAULT_READ_INTERVAL);
-pub static READ_DURATION_S: Mutex<CriticalSectionRawMutex, u16> = Mutex::new(DEFAULT_READ_DURATION);
+    Mutex::new(DEFAULT_READ_INTERVAL_MS);
+pub static READ_DURATION_S: Mutex<CriticalSectionRawMutex, u16> =
+    Mutex::new(DEFAULT_READ_DURATION_S);
 pub static EPOCH: Mutex<CriticalSectionRawMutex, u32> = Mutex::new(0);

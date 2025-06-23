@@ -2,8 +2,8 @@ use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_time::{Delay, Duration, Instant, Timer};
 use esp_hal::{gpio::Input, i2c::master::I2c, Async};
 use mpu6050_dmp::{
-    accel::Accel, address::Address, calibration::CalibrationParameters, gyro::Gyro,
-    motion::MotionConfig, sensor_async::Mpu6050,
+    accel::Accel, address::Address, calibration::CalibrationParameters, error_async::Error,
+    gyro::Gyro, motion::MotionConfig, sensor_async::Mpu6050,
 };
 
 use crate::shared::{
@@ -11,7 +11,9 @@ use crate::shared::{
 };
 pub type Sensor<'a> = Mpu6050<I2c<'a, Async>>;
 
-pub async fn initialize_sensor<'a>(i2c: I2c<'a, Async>) -> Sensor<'a> {
+pub async fn initialize_sensor<'a>(
+    i2c: I2c<'a, Async>,
+) -> Result<Sensor<'a>, Error<I2c<'a, Async>>> {
     let mut sensor = Mpu6050::new(i2c, Address::default()).await.unwrap();
 
     info!("MPU6050-DMP Sensor Initialized");
@@ -19,39 +21,40 @@ pub async fn initialize_sensor<'a>(i2c: I2c<'a, Async>) -> Sensor<'a> {
     // Configure sensor settings
     sensor
         .set_clock_source(mpu6050_dmp::clock_source::ClockSource::Xgyro)
-        .await
-        .unwrap();
+        .await?;
 
     // Set accelerometer full scale to most sensitive range
     sensor
         .set_accel_full_scale(mpu6050_dmp::accel::AccelFullScale::G2)
-        .await
-        .unwrap();
+        .await?;
 
     // Configure DLPF for maximum sensitivity
     sensor
         .set_digital_lowpass_filter(mpu6050_dmp::config::DigitalLowPassFilter::Filter6)
-        .await
-        .unwrap();
+        .await?;
 
     // Set sample rate to 1kHz (1ms period)
-    sensor.set_sample_rate_divider(0).await.unwrap();
-    sensor
+    sensor.set_sample_rate_divider(0).await?;
+    Ok(sensor)
 }
 
-pub async fn configure_sensor<'a>(sensor: &mut Mpu6050<I2c<'a, Async>>, delay: &mut Delay) {
+pub async fn configure_sensor<'a>(
+    sensor: &mut Mpu6050<I2c<'a, Async>>,
+    delay: &mut Delay,
+) -> Result<(), Error<I2c<'a, Async>>> {
     // Configure calibration parameters
     let calibration_params = CalibrationParameters::new(
         mpu6050_dmp::accel::AccelFullScale::G2,
         mpu6050_dmp::gyro::GyroFullScale::Deg2000,
         mpu6050_dmp::calibration::ReferenceGravity::ZN,
     );
-    sensor
-        .set_accel_calibration(&Accel::new(0, 0, 0))
-        .await
-        .unwrap();
+    // sensor
+    //     .set_accel_calibration(&Accel::new(0, 0, 0))
+    //     .await
+    //     .?();
     info!("Calibrating Sensor");
-    sensor.calibrate(delay, &calibration_params).await.unwrap();
+    sensor.calibrate(delay, &calibration_params).await?;
+
     info!("Sensor Calibrated");
 
     // Configure motion detection with maximum sensitivity
@@ -59,33 +62,30 @@ pub async fn configure_sensor<'a>(sensor: &mut Mpu6050<I2c<'a, Async>>, delay: &
         threshold: 1, // 2mg threshold (minimum possible)
         duration: 1,  // 1ms at 1kHz sample rate (fastest response)
     };
-    sensor
-        .configure_motion_detection(&motion_config)
-        .await
-        .unwrap();
-    sensor.enable_motion_interrupt().await.unwrap();
+    sensor.configure_motion_detection(&motion_config).await?;
+    sensor.enable_motion_interrupt().await?;
+    Ok(())
 }
 
 #[embassy_executor::task]
 pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input<'static>) {
     // Before entering cyclic measurement, make sure the Interrupt Pin is high
     info!("Starting motion detection");
-    motion_int.wait_for_high().await;
-    info!("Motion detection ready");
     // Main loop monitoring motion detection events
     loop {
         // Wait for hardware interrupt (INT pin going low)
-        motion_int.wait_for_low().await;
-        info!("Motion_int is low, reading sensor data");
+        motion_int.wait_for_high().await;
+        info!("Motion detection ready");
 
         let mut start = Instant::now();
-        *BLINK_INTERVAL_MS.lock().await = 10;
+        motion_int.wait_for_low().await;
 
         // Loop for 10 seconds
         let duration = *READ_DURATION_S.lock().await as u64;
         // Reset the EPOCH to current time
         *EPOCH.lock().await = start.as_millis() as u32;
         info!("Reading sensor data for {} seconds", duration);
+        *BLINK_INTERVAL_MS.lock().await = 10;
         while Instant::now() - start < Duration::from_secs(duration) {
             // Read current sensor data
             let loop_start = Instant::now();
@@ -93,13 +93,19 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
             if let Ok((accel, gyro)) = motion {
                 report_motion(accel, gyro).await;
             }
-
             // // Monitor motion while it continues
-            if motion_int.is_low() {
-                start = Instant::now();
-                info!("Motion detected, resetting start time.");
+            let motion_check = sensor.check_motion().await;
+            match motion_check {
+                Ok(result) => {
+                    if result.0 {
+                        start = Instant::now();
+                        info!("Motion detected, resetting start time");
+                    }
+                }
+                Err(e) => {
+                    error!("Error when reading motion_check: {}", e);
+                }
             }
-
             //measure how long the loop took so far.
             let elapsed = Instant::now() - loop_start;
             let interval = Duration::from_millis(*READ_INTERVAL_MS.lock().await as u64);
@@ -114,7 +120,6 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
                 );
             }
         }
-
         info!("No more motion detected");
         *BLINK_INTERVAL_MS.lock().await = 1000;
     }

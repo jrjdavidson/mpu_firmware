@@ -53,8 +53,8 @@ async fn main(spawner: Spawner) {
     let transport = BleConnector::new(&wifi_init, peripherals.BT);
     let ble_controller = ExternalController::<_, 20>::new(transport);
     // Initialize I2C and sensor
-    let sda = peripherals.GPIO22;
-    let scl = peripherals.GPIO23;
+    let sda = peripherals.GPIO1;
+    let scl = peripherals.GPIO2;
 
     // Configure GPIO16 as interrupt input with pull-up
     let motion_int: Input<'_> = Input::new(
@@ -68,10 +68,27 @@ async fn main(spawner: Spawner) {
         .with_scl(scl)
         .with_sda(sda)
         .into_async();
-    let mut sensor = initialize_sensor(bus).await;
+    let sensor_result = initialize_sensor(bus).await;
+    let mut sensor = match sensor_result {
+        Ok(sensor) => sensor,
+        Err(e) => {
+            info!("Failed to initialize sensor: {:?}", e);
+            *BLINK_INTERVAL_MS.lock().await = 100;
+            return;
+        }
+    };
     let mut delay = Delay;
     *BLINK_INTERVAL_MS.lock().await = 200;
-    configure_sensor(&mut sensor, &mut delay).await;
+    let sensor_config = configure_sensor(&mut sensor, &mut delay).await;
+    match sensor_config {
+        Ok(_) => info!("Sensor configured successfully"),
+        Err(e) => {
+            info!("Failed to configure sensor: {:?}", e);
+            *BLINK_INTERVAL_MS.lock().await = 100;
+
+            return;
+        }
+    }
     *BLINK_INTERVAL_MS.lock().await = 1000;
 
     spawner.spawn(motion_detection(sensor, motion_int)).ok();

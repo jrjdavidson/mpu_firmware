@@ -641,6 +641,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "esp-hal-buzzer"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d37f3c15b6f117e6fe50d9eb56ef17756402b06eea3d267b225164a693869db4"
+dependencies = [
+ "defmt 1.0.1",
+ "document-features",
+ "esp-hal",
+]
+
+[[package]]
 name = "esp-hal-embassy"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1096,6 +1107,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
 
 [[package]]
+name = "micromath"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3c8dda44ff03a2f238717214da50f65d5a53b45cd213a7370424ffdb6fae815"
+
+[[package]]
 name = "minijinja"
 version = "2.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1133,9 +1150,11 @@ dependencies = [
  "esp-alloc",
  "esp-bootloader-esp-idf",
  "esp-hal",
+ "esp-hal-buzzer",
  "esp-hal-embassy",
  "esp-wifi",
  "heapless",
+ "micromath",
  "mpu6050-dmp",
  "panic-rtt-target",
  "rtt-target",

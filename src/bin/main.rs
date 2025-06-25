@@ -5,20 +5,20 @@
     reason = "mem::forget is generally not safe to do with esp_hal types, especially those \
     holding buffers for the duration of a data transfer."
 )]
-
 use bt_hci::controller::ExternalController;
 use defmt::info;
 use embassy_executor::Spawner;
 use embassy_time::Delay;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull};
+use esp_hal::ledc::Ledc;
 use esp_hal::timer::systimer::SystemTimer;
 use esp_hal::timer::timg::TimerGroup;
 use esp_wifi::ble::controller::BleConnector;
-use mputest::ble;
 use mputest::led::led_blink_task;
 use mputest::sensor::{configure_sensor, initialize_sensor, motion_detection};
 use mputest::shared::BLINK_INTERVAL_MS;
+use mputest::{ble, buzzer};
 use panic_rtt_target as _;
 
 extern crate alloc;
@@ -38,6 +38,10 @@ async fn main(spawner: Spawner) {
 
     let led = Output::new(peripherals.GPIO15, Level::High, OutputConfig::default());
     spawner.spawn(led_blink_task(led)).ok();
+
+    let ledc = Ledc::new(peripherals.LEDC);
+    let buzzer_gpio = peripherals.GPIO19;
+
     esp_alloc::heap_allocator!(size: 64 * 1024);
 
     let timer0 = SystemTimer::new(peripherals.SYSTIMER);
@@ -54,11 +58,11 @@ async fn main(spawner: Spawner) {
     let ble_controller = ExternalController::<_, 20>::new(transport);
     // Initialize I2C and sensor
     let sda = peripherals.GPIO1;
-    let scl = peripherals.GPIO2;
+    let scl = peripherals.GPIO0;
 
     // Configure GPIO16 as interrupt input with pull-up
     let motion_int: Input<'_> = Input::new(
-        peripherals.GPIO0,
+        peripherals.GPIO2,
         InputConfig::default().with_pull(Pull::Up),
     );
 
@@ -73,23 +77,27 @@ async fn main(spawner: Spawner) {
         Ok(sensor) => sensor,
         Err(e) => {
             info!("Failed to initialize sensor: {:?}", e);
-            *BLINK_INTERVAL_MS.lock().await = 100;
+            BLINK_INTERVAL_MS.signal(100);
             return;
         }
     };
     let mut delay = Delay;
-    *BLINK_INTERVAL_MS.lock().await = 200;
+    BLINK_INTERVAL_MS.signal(200);
     let sensor_config = configure_sensor(&mut sensor, &mut delay).await;
     match sensor_config {
         Ok(_) => info!("Sensor configured successfully"),
         Err(e) => {
             info!("Failed to configure sensor: {:?}", e);
-            *BLINK_INTERVAL_MS.lock().await = 100;
+            BLINK_INTERVAL_MS.signal(100);
 
             return;
         }
     }
-    *BLINK_INTERVAL_MS.lock().await = 1000;
+    BLINK_INTERVAL_MS.signal(1000);
+
+    spawner
+        .spawn(buzzer::buzzer_task(ledc, buzzer_gpio.into()))
+        .ok();
 
     spawner.spawn(motion_detection(sensor, motion_int)).ok();
     ble::run(ble_controller).await;

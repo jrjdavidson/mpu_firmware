@@ -50,6 +50,8 @@ embassy-futures = "0.1.1"
 heapless = "0.8.0"
 mpu6050-dmp = { version = "0.6.0", features = ["async", "defmt-03"] }
 embassy-sync = { version = "0.7.0", features = ["defmt"] }
+esp-hal-buzzer = { version = "0.1.0", features = ["defmt", "esp32c6"] }
+micromath = "2.1.0"
 
 [dev-dependencies]
 embedded-test = { version = "0.6.0", features = [

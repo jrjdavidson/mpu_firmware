@@ -1,13 +1,14 @@
+use crate::shared::{
+    BuzzFrequencyMode, SensorData, BLINK_INTERVAL_MS, BUZZ_FREQUENCY, EPOCH, MAX_BUZZ_VALUE,
+    MIN_BUZZ_VALUE, READ_DURATION_S, READ_INTERVAL_MS, SENSOR_CHANNEL, SOUND_METHOD,
+};
 use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_time::{Delay, Duration, Instant, Timer};
 use esp_hal::{gpio::Input, i2c::master::I2c, Async};
+use micromath::F32Ext;
 use mpu6050_dmp::{
     accel::Accel, address::Address, calibration::CalibrationParameters, error_async::Error,
     gyro::Gyro, motion::MotionConfig, sensor_async::Mpu6050,
-};
-
-use crate::shared::{
-    SensorData, BLINK_INTERVAL_MS, EPOCH, READ_DURATION_S, READ_INTERVAL_MS, SENSOR_CHANNEL,
 };
 pub type Sensor<'a> = Mpu6050<I2c<'a, Async>>;
 
@@ -17,7 +18,6 @@ pub async fn initialize_sensor<'a>(
     let mut sensor = Mpu6050::new(i2c, Address::default()).await.unwrap();
 
     info!("MPU6050-DMP Sensor Initialized");
-
     // Configure sensor settings
     sensor
         .set_clock_source(mpu6050_dmp::clock_source::ClockSource::Xgyro)
@@ -30,7 +30,7 @@ pub async fn initialize_sensor<'a>(
 
     // Configure DLPF for maximum sensitivity
     sensor
-        .set_digital_lowpass_filter(mpu6050_dmp::config::DigitalLowPassFilter::Filter6)
+        .set_digital_lowpass_filter(mpu6050_dmp::config::DigitalLowPassFilter::Filter1)
         .await?;
 
     // Set sample rate to 1kHz (1ms period)
@@ -42,11 +42,13 @@ pub async fn configure_sensor<'a>(
     sensor: &mut Mpu6050<I2c<'a, Async>>,
     delay: &mut Delay,
 ) -> Result<(), Error<I2c<'a, Async>>> {
+    // sensor.initialize_dmp(delay).await?;
+
     // Configure calibration parameters
     let calibration_params = CalibrationParameters::new(
         mpu6050_dmp::accel::AccelFullScale::G2,
         mpu6050_dmp::gyro::GyroFullScale::Deg2000,
-        mpu6050_dmp::calibration::ReferenceGravity::ZN,
+        mpu6050_dmp::calibration::ReferenceGravity::XN,
     );
     // sensor
     //     .set_accel_calibration(&Accel::new(0, 0, 0))
@@ -85,12 +87,19 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
         // Reset the EPOCH to current time
         *EPOCH.lock().await = start.as_millis() as u32;
         info!("Reading sensor data for {} seconds", duration);
-        *BLINK_INTERVAL_MS.lock().await = 10;
+        BLINK_INTERVAL_MS.signal(10);
+        MIN_BUZZ_VALUE.signal(300);
+        MAX_BUZZ_VALUE.signal(10000);
+        SOUND_METHOD.signal(BuzzFrequencyMode::AccelX);
+        // PLAY_SOUND.signal(true);
+        let sound_method = SOUND_METHOD.wait().await;
         while Instant::now() - start < Duration::from_secs(duration) {
             // Read current sensor data
             let loop_start = Instant::now();
             let motion = sensor.motion6().await;
             if let Ok((accel, gyro)) = motion {
+                let frequency = compute_buzz_frequency(&accel, &gyro, sound_method);
+                BUZZ_FREQUENCY.signal(frequency);
                 report_motion(accel, gyro).await;
             }
             // // Monitor motion while it continues
@@ -121,7 +130,8 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
             }
         }
         info!("No more motion detected");
-        *BLINK_INTERVAL_MS.lock().await = 1000;
+        BLINK_INTERVAL_MS.signal(1000);
+        BUZZ_FREQUENCY.signal(0); // Stop buzzer
     }
 }
 
@@ -140,8 +150,31 @@ async fn report_motion<'a>(accel: Accel, gyro: Gyro) {
         debug!("SENSOR_CHANNEL is full, popping oldest data");
         SENSOR_CHANNEL.receive().await;
     }
+    debug!("Reporting motion data: {:?}", Debug2Format(&data));
     let send_result = SENSOR_CHANNEL.try_send(data);
     if let Err(send_error) = send_result {
         error!("Send error : {:?}", Debug2Format(&send_error));
     };
+}
+fn compute_buzz_frequency(accel: &Accel, gyro: &Gyro, mode: BuzzFrequencyMode) -> u32 {
+    match mode {
+        BuzzFrequencyMode::AccelX => accel.x().abs() as u32,
+        BuzzFrequencyMode::AccelY => accel.y().abs() as u32,
+        BuzzFrequencyMode::AccelZ => accel.z().abs() as u32,
+        BuzzFrequencyMode::GyroX => gyro.x().abs() as u32,
+        BuzzFrequencyMode::GyroY => gyro.y().abs() as u32,
+        BuzzFrequencyMode::GyroZ => gyro.z().abs() as u32,
+        BuzzFrequencyMode::AccelMagnitude => {
+            let x = accel.x() as i64;
+            let y = accel.y() as i64;
+            let z = accel.z() as i64;
+            ((x * x + y * y + z * z) as f32).sqrt() as u32
+        }
+        BuzzFrequencyMode::GyroMagnitude => {
+            let x = gyro.x() as i64;
+            let y = gyro.y() as i64;
+            let z = gyro.z() as i64;
+            ((x * x + y * y + z * z) as f32).sqrt() as u32
+        }
+    }
 }

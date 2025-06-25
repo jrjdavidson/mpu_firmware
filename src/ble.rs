@@ -188,10 +188,6 @@ async fn advertise<'values, 'server, C: Controller>(
     Ok(conn)
 }
 
-/// Example task to use the BLE notifier interface.
-/// This task will notify the connected central of a counter value every 2 seconds.
-/// It will also read the RSSI value every 2 seconds.
-/// and will stop when the connection is closed by the central or an error occurs.
 async fn custom_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'_, '_, P>) {
     let mut tick: u16 = 0;
     let sensor_accel = &server.imu_service.sensor_accel;
@@ -242,6 +238,6 @@ async fn custom_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'
             break;
         };
         //throttle notifications, or else will drop connection
-        Timer::after_millis(20).await;
+        Timer::after_millis(100).await;
     }
 }

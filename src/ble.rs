@@ -31,6 +31,13 @@ struct MyService {
     read_interval: u64,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef4", write, read, value = DEFAULT_READ_DURATION_S)]
     read_duration: u16,
+    #[characteristic(
+        uuid = "12345678-1234-5678-1234-56789abcdef5",
+        write,
+        read,
+        value = false
+    )]
+    play_sound: bool,
 }
 
 /// Run the BLE stack.
@@ -116,33 +123,22 @@ async fn gatt_events_task<P: PacketPool>(
                         //     info!("[gatt] Read Event to Level Characteristic: {:?}", value);
                         // }
                     }
-                    GattEvent::Write(event) => {
-                        if event.handle() == read_duration.handle {
-                            info!(
-                                "[gatt] Write Event to Level Characteristic: {:?}",
-                                event.data()
-                            );
-                            if event.data().len() == 2 {
-                                let value = u16::from_le_bytes([event.data()[0], event.data()[1]]);
+                    GattEvent::Write(event) => match event.handle() {
+                        h if h == read_duration.handle => {
+                            handle_u16_write(event.data(), |value| async move {
                                 info!("read_duration:{}", value);
                                 *READ_DURATION_S.lock().await = value;
-                            } else {
-                                warn!("[gatt] Write Event to Level Characteristic: invalid data length for u16: {:?}", event.data());
-                            }
+                            })
+                            .await;
                         }
-                        if event.handle() == read_interval.handle {
-                            info!(
-                                "[gatt] Write Event to Level Characteristic: {:?}",
-                                event.data()
-                            );
-                            if event.data().len() == 2 {
-                                let value = u16::from_le_bytes([event.data()[0], event.data()[1]]);
+                        h if h == read_interval.handle => {
+                            handle_u16_write(event.data(), |value| async move {
                                 *READ_INTERVAL_MS.lock().await = value as u64;
-                            } else {
-                                warn!("[gatt] Write Event to Level Characteristic: invalid data length for u16: {:?}", event.data());
-                            }
+                            })
+                            .await;
                         }
-                    }
+                        _ => {}
+                    },
                 };
                 // This step is also performed at drop(), but writing it explicitly is necessary
                 // in order to ensure reply is sent.
@@ -158,6 +154,22 @@ async fn gatt_events_task<P: PacketPool>(
     Ok(())
 }
 
+// Helper function for u16 GATT writes
+async fn handle_u16_write<F, Fut>(data: &[u8], mut f: F)
+where
+    F: FnMut(u16) -> Fut,
+    Fut: core::future::Future<Output = ()>,
+{
+    if data.len() == 2 {
+        let value = u16::from_le_bytes([data[0], data[1]]);
+        f(value).await;
+    } else {
+        warn!(
+            "[gatt] Write Event: invalid data length for u16: {:?}",
+            data
+        );
+    }
+}
 /// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
 async fn advertise<'values, 'server, C: Controller>(
     name: &'values str,

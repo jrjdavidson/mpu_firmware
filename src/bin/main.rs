@@ -40,7 +40,7 @@ async fn main(spawner: Spawner) {
     spawner.spawn(led_blink_task(led)).ok();
 
     let ledc = Ledc::new(peripherals.LEDC);
-    let buzzer_gpio = peripherals.GPIO19;
+    let buzzer_gpio = peripherals.GPIO21;
 
     esp_alloc::heap_allocator!(size: 64 * 1024);
 
@@ -62,7 +62,7 @@ async fn main(spawner: Spawner) {
 
     // Configure GPIO16 as interrupt input with pull-up
     let motion_int: Input<'_> = Input::new(
-        peripherals.GPIO2,
+        peripherals.GPIO17,
         InputConfig::default().with_pull(Pull::Up),
     );
 

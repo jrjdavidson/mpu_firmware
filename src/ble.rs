@@ -6,8 +6,8 @@ use heapless::Vec;
 use trouble_host::prelude::*;
 
 use crate::shared::{
-    ToBytes, DEFAULT_READ_DURATION_S, DEFAULT_READ_INTERVAL_MS, READ_DURATION_S, READ_INTERVAL_MS,
-    SENSOR_CHANNEL,
+    ToBytes, DEFAULT_READ_DURATION_S, DEFAULT_READ_INTERVAL_MS, MIN_READ_INTERVAL_MS,
+    MOTION_READ_INTERVAL_MS, PLAY_SOUND, READ_DURATION_S, SENSOR_CHANNEL,
 };
 
 /// Max number of connections
@@ -28,7 +28,9 @@ struct MyService {
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef2", read, notify, value =Vec::from_slice(&[0;10]).unwrap())]
     sensor_gyro: Vec<u8, 100>,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_READ_INTERVAL_MS)]
-    read_interval: u64,
+    motion_read_interval: u64,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_READ_INTERVAL_MS)]
+    min_read_interval: u64,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef4", write, read, value = DEFAULT_READ_DURATION_S)]
     read_duration: u16,
     #[characteristic(
@@ -47,7 +49,7 @@ where
 {
     // Using a fixed "random" address can be useful for testing. In real scenarios, one would
     // use e.g. the MAC 6 byte array as the address (how to get that varies by the platform).
-    let address: Address = Address::random([0xff, 0x8f, 0x1a, 0x05, 0xe4, 0xff]);
+    let address: Address = Address::random(esp_hal::efuse::Efuse::mac_address());
     info!("Our address = {:?}", address);
 
     let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
@@ -108,7 +110,9 @@ async fn gatt_events_task<P: PacketPool>(
     // let sensor_accel = &server.imu_service.sensor_accel;
     // let sensor_gyro = &server.imu_service.sensor_gyro;
     let read_duration = &server.imu_service.read_duration;
-    let read_interval = &server.imu_service.read_interval;
+    let motion_read_interval = &server.imu_service.motion_read_interval;
+    let min_read_interval = &server.imu_service.min_read_interval;
+    let play_sound = &server.imu_service.play_sound;
     let reason = loop {
         match conn.next().await {
             GattConnectionEvent::Disconnected { reason } => break reason,
@@ -131,11 +135,28 @@ async fn gatt_events_task<P: PacketPool>(
                             })
                             .await;
                         }
-                        h if h == read_interval.handle => {
-                            handle_u16_write(event.data(), |value| async move {
-                                *READ_INTERVAL_MS.lock().await = value as u64;
+                        h if h == min_read_interval.handle => {
+                            handle_u64_write(event.data(), |value| async move {
+                                *MIN_READ_INTERVAL_MS.lock().await = value as u64;
                             })
                             .await;
+                        }
+                        h if h == motion_read_interval.handle => {
+                            handle_u64_write(event.data(), |value| async move {
+                                *MOTION_READ_INTERVAL_MS.lock().await = value as u64;
+                            })
+                            .await;
+                        }
+                        h if h == play_sound.handle => {
+                            let data = event.data();
+                            if data.len() == 1 {
+                                PLAY_SOUND.signal(data[0] != 0);
+                            } else {
+                                warn!(
+                                    "[gatt] Write Event: invalid data length for u16: {:?}",
+                                    data
+                                );
+                            }
                         }
                         _ => {}
                     },
@@ -170,6 +191,26 @@ where
         );
     }
 }
+
+// Helper function for u64 GATT writes
+async fn handle_u64_write<F, Fut>(data: &[u8], mut f: F)
+where
+    F: FnMut(u64) -> Fut,
+    Fut: core::future::Future<Output = ()>,
+{
+    if data.len() == 8 {
+        let value = u64::from_le_bytes([
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+        ]);
+        f(value).await;
+    } else {
+        warn!(
+            "[gatt] Write Event: invalid data length for u64: {:?}",
+            data
+        );
+    }
+}
+
 /// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
 async fn advertise<'values, 'server, C: Controller>(
     name: &'values str,

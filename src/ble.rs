@@ -6,8 +6,9 @@ use heapless::Vec;
 use trouble_host::prelude::*;
 
 use crate::shared::{
-    ToBytes, DEFAULT_READ_DURATION_S, DEFAULT_READ_INTERVAL_MS, MIN_READ_INTERVAL_MS,
-    MOTION_READ_INTERVAL_MS, PLAY_SOUND, READ_DURATION_S, SENSOR_CHANNEL,
+    ToBytes, DEFAULT_IDLE_SAMPLE_INTERVAL_MS, DEFAULT_MOTION_READ_DURATION_S,
+    DEFAULT_MOTION_SAMPLE_INTERVAL_MS, IDLE_SAMPLE_INTERVAL_MS, MOTION_READ_DURATION_S,
+    MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, SENSOR_CHANNEL,
 };
 
 /// Max number of connections
@@ -27,12 +28,12 @@ struct MyService {
     sensor_accel: Vec<u8, 100>,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef2", read, notify, value =Vec::from_slice(&[0;10]).unwrap())]
     sensor_gyro: Vec<u8, 100>,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_READ_INTERVAL_MS)]
-    motion_read_interval: u64,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_READ_INTERVAL_MS)]
-    min_read_interval: u64,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef4", write, read, value = DEFAULT_READ_DURATION_S)]
-    read_duration: u16,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_MOTION_SAMPLE_INTERVAL_MS)]
+    motion_sample_interval: u64,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_IDLE_SAMPLE_INTERVAL_MS)]
+    idle_sample_interval: u64,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef4", write, read, value = DEFAULT_MOTION_READ_DURATION_S)]
+    motion_read_duration: u16,
     #[characteristic(
         uuid = "12345678-1234-5678-1234-56789abcdef5",
         write,
@@ -109,9 +110,9 @@ async fn gatt_events_task<P: PacketPool>(
 ) -> Result<(), Error> {
     // let sensor_accel = &server.imu_service.sensor_accel;
     // let sensor_gyro = &server.imu_service.sensor_gyro;
-    let read_duration = &server.imu_service.read_duration;
-    let motion_read_interval = &server.imu_service.motion_read_interval;
-    let min_read_interval = &server.imu_service.min_read_interval;
+    let motion_read_duration = &server.imu_service.motion_read_duration;
+    let motion_sample_interval = &server.imu_service.motion_sample_interval;
+    let idle_sample_interval = &server.imu_service.idle_sample_interval;
     let play_sound = &server.imu_service.play_sound;
     let reason = loop {
         match conn.next().await {
@@ -128,22 +129,22 @@ async fn gatt_events_task<P: PacketPool>(
                         // }
                     }
                     GattEvent::Write(event) => match event.handle() {
-                        h if h == read_duration.handle => {
+                        h if h == motion_read_duration.handle => {
                             handle_u16_write(event.data(), |value| async move {
-                                info!("read_duration:{}", value);
-                                *READ_DURATION_S.lock().await = value;
+                                info!("motion_read_duration:{}", value);
+                                *MOTION_READ_DURATION_S.lock().await = value;
                             })
                             .await;
                         }
-                        h if h == min_read_interval.handle => {
+                        h if h == motion_sample_interval.handle => {
                             handle_u64_write(event.data(), |value| async move {
-                                *MIN_READ_INTERVAL_MS.lock().await = value as u64;
+                                *MOTION_SAMPLE_INTERVAL_MS.lock().await = value as u64;
                             })
                             .await;
                         }
-                        h if h == motion_read_interval.handle => {
+                        h if h == idle_sample_interval.handle => {
                             handle_u64_write(event.data(), |value| async move {
-                                *MOTION_READ_INTERVAL_MS.lock().await = value as u64;
+                                *IDLE_SAMPLE_INTERVAL_MS.lock().await = value as u64;
                             })
                             .await;
                         }
@@ -242,19 +243,15 @@ async fn advertise<'values, 'server, C: Controller>(
 }
 
 async fn custom_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'_, '_, P>) {
-    let mut tick: u16 = 0;
     let sensor_accel = &server.imu_service.sensor_accel;
     let sensor_gyro = &server.imu_service.sensor_gyro;
     let mut buf: Vec<u8, 16> = Vec::new();
     let mut accel_batch: Vec<u8, 100> = Vec::new();
     let mut gyro_batch: Vec<u8, 100> = Vec::new();
     loop {
-        tick = tick.wrapping_add(1);
-        let mut count = 0;
+        let mut count = 1;
         accel_batch.clear();
         gyro_batch.clear();
-
-        info!("[custom_task] notifying connection of tick {}", tick);
         buf.clear();
         let data = SENSOR_CHANNEL.receive().await;
         data.write_to_vec(&mut buf);
@@ -265,7 +262,6 @@ async fn custom_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'
         accel_batch.extend_from_slice(&buf[0..6]).ok();
         gyro_batch.extend_from_slice(&buf[12..16]).ok();
         gyro_batch.extend_from_slice(&buf[6..12]).ok();
-        count += 1;
         while count < 10 {
             match SENSOR_CHANNEL.try_receive() {
                 Ok(data) => {

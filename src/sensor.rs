@@ -1,7 +1,7 @@
 use crate::shared::{
-    BuzzFrequencyMode, SensorData, BLINK_INTERVAL_MS, BUZZ_FREQUENCY, EPOCH, MAX_BUZZ_VALUE,
-    MIN_BUZZ_VALUE, MIN_READ_INTERVAL_MS, MOTION_READ_INTERVAL_MS, READ_DURATION_S, SENSOR_CHANNEL,
-    SOUND_METHOD,
+    BuzzFrequencyMode, SensorData, BLINK_INTERVAL_MS, BUZZ_FREQUENCY, EPOCH,
+    IDLE_SAMPLE_INTERVAL_MS, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE, MOTION_READ_DURATION_S,
+    MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, SENSOR_CHANNEL, SOUND_METHOD,
 };
 use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_time::{Delay, Duration, Instant, Timer, WithTimeout};
@@ -75,31 +75,51 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
     // Before entering cyclic measurement, make sure the Interrupt Pin is high
     info!("Starting motion detection");
     // Main loop monitoring motion detection events
-
+    MIN_BUZZ_VALUE.signal(300);
+    MAX_BUZZ_VALUE.signal(1000);
+    SOUND_METHOD.signal(BuzzFrequencyMode::AccelY);
+    let sound_method: BuzzFrequencyMode = SOUND_METHOD.wait().await;
     loop {
-        motion_int.wait_for_high().await; // Wait for motion to stop
+        let min_interval = *IDLE_SAMPLE_INTERVAL_MS.lock().await;
+
+        let wait_start = Instant::now();
+        let wait_for_high_result = motion_int
+            .wait_for_high()
+            .with_timeout(Duration::from_millis(min_interval))
+            .await; // Wait for motion to stop
 
         // Wait for hardware interrupt (INT pin going low)
         info!("Motion detection ready");
-        let min_interval = *MIN_READ_INTERVAL_MS.lock().await;
-
-        let _ = motion_int
+        // If the wait_for_high timed out, we can continue to the next loop iteration
+        let elapsed = Instant::now() - wait_start;
+        let remainder = min_interval.saturating_sub(elapsed.as_millis() as u64);
+        info!(
+            "Motion detected, waiting for INT pin to go low, remaining time: {} ms",
+            remainder
+        );
+        let wait_for_low_result = motion_int
             .wait_for_low()
-            .with_timeout(Duration::from_millis(min_interval))
+            .with_timeout(Duration::from_millis(remainder))
             .await;
+        if wait_for_low_result.is_err() || wait_for_high_result.is_err() {
+            let sound_method: BuzzFrequencyMode = SOUND_METHOD.try_take().unwrap_or(sound_method);
+
+            // timeout reached, continue to next loop iteration
+            sensor = report_motion(sensor, sound_method).await;
+            continue;
+        }
         let mut start = Instant::now();
 
         // Loop for 10 seconds
-        let duration = *READ_DURATION_S.lock().await as u64;
+        let duration = *MOTION_READ_DURATION_S.lock().await as u64;
         // Reset the EPOCH to current time
         *EPOCH.lock().await = start.as_millis() as u32;
         info!("Reading sensor data for {} seconds", duration);
         BLINK_INTERVAL_MS.signal(10);
-        MIN_BUZZ_VALUE.signal(300);
-        MAX_BUZZ_VALUE.signal(10000);
-        SOUND_METHOD.signal(BuzzFrequencyMode::AccelX);
-        // PLAY_SOUND.signal(true);
-        let sound_method = SOUND_METHOD.wait().await;
+
+        let sound_method: BuzzFrequencyMode = SOUND_METHOD.try_take().unwrap_or(sound_method);
+
+        PLAY_SOUND.signal(true);
         while Instant::now() - start < Duration::from_secs(duration) {
             // Read current sensor data
             let loop_start = Instant::now();
@@ -120,7 +140,7 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
             }
             //measure how long the loop took so far.
             let elapsed = Instant::now() - loop_start;
-            let interval = Duration::from_millis(*MOTION_READ_INTERVAL_MS.lock().await as u64);
+            let interval = Duration::from_millis(*MOTION_SAMPLE_INTERVAL_MS.lock().await as u64);
             // If the loop took less time than the interval, wait for the remaining time
             if elapsed < interval {
                 Timer::after(interval - elapsed).await;
@@ -141,7 +161,6 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
 async fn report_motion<'a>(mut sensor: Sensor<'a>, sound_method: BuzzFrequencyMode) -> Sensor<'a> {
     let motion = sensor.motion6().await;
     if let Ok((accel, gyro)) = motion {
-        info!("Motion data: Accel: {:?}, Gyro: {:?}", accel, gyro);
         let frequency = compute_buzz_frequency(&accel, &gyro, sound_method);
         BUZZ_FREQUENCY.signal(frequency);
         let data = SensorData {

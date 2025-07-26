@@ -50,19 +50,18 @@ impl ToBytes for SensorData {
         vec.extend_from_slice(&self.timestamp_ms.to_le_bytes()).ok();
     }
 }
-pub const DEFAULT_READ_INTERVAL_MS: u64 = 10;
-pub const DEFAULT_MIN_READ_INTERVAL_MS: u64 = 1000;
-pub const DEFAULT_MOTION_READ_INTERVAL_MS: u64 = 60;
-pub const DEFAULT_READ_DURATION_S: u16 = 5;
+pub const DEFAULT_MOTION_SAMPLE_INTERVAL_MS: u64 = 10;
+pub const DEFAULT_IDLE_SAMPLE_INTERVAL_MS: u64 = 60000;
+pub const DEFAULT_MOTION_READ_DURATION_S: u16 = 5;
 
 pub static SENSOR_CHANNEL: Channel<CriticalSectionRawMutex, SensorData, 100> = Channel::new();
 pub static BLINK_INTERVAL_MS: Signal<CriticalSectionRawMutex, u64> = Signal::new();
-pub static MOTION_READ_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =
-    Mutex::new(DEFAULT_MOTION_READ_INTERVAL_MS);
-pub static MIN_READ_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =
-    Mutex::new(DEFAULT_MIN_READ_INTERVAL_MS);
-pub static READ_DURATION_S: Mutex<CriticalSectionRawMutex, u16> =
-    Mutex::new(DEFAULT_READ_DURATION_S);
+pub static MOTION_SAMPLE_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =
+    Mutex::new(DEFAULT_MOTION_SAMPLE_INTERVAL_MS);
+pub static IDLE_SAMPLE_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =
+    Mutex::new(DEFAULT_IDLE_SAMPLE_INTERVAL_MS);
+pub static MOTION_READ_DURATION_S: Mutex<CriticalSectionRawMutex, u16> =
+    Mutex::new(DEFAULT_MOTION_READ_DURATION_S);
 pub static EPOCH: Mutex<CriticalSectionRawMutex, u32> = Mutex::new(0);
 pub static BUZZ_FREQUENCY: Signal<CriticalSectionRawMutex, u32> = Signal::new();
 pub static MIN_BUZZ_VALUE: Signal<CriticalSectionRawMutex, u32> = Signal::new();

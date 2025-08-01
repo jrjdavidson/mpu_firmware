@@ -51,8 +51,8 @@ async fn main(spawner: Spawner) {
 
     let rng = esp_hal::rng::Rng::new(peripherals.RNG);
     let timer1 = TimerGroup::new(peripherals.TIMG0);
-    let wifi_init = esp_wifi::init(timer1.timer0, rng, peripherals.RADIO_CLK)
-        .expect("Failed to initialize WIFI/BLE controller");
+    let wifi_init =
+        esp_wifi::init(timer1.timer0, rng).expect("Failed to initialize WIFI/BLE controller");
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
     let transport = BleConnector::new(&wifi_init, peripherals.BT);
     let ble_controller = ExternalController::<_, 20>::new(transport);
@@ -101,5 +101,4 @@ async fn main(spawner: Spawner) {
 
     spawner.spawn(motion_detection(sensor, motion_int)).ok();
     ble::run(ble_controller).await;
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.0.0-beta.1/examples/src/bin
 }

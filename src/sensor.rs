@@ -35,7 +35,7 @@ pub async fn initialize_sensor<'a>(
         .await?;
 
     // Set sample rate to 1kHz (1ms period)
-    // sensor.set_sample_rate_divider(0).await?;
+    sensor.set_sample_rate_divider(0).await?;
     Ok(sensor)
 }
 
@@ -174,7 +174,7 @@ async fn report_motion<'a>(mut sensor: Sensor<'a>, sound_method: BuzzFrequencyMo
         };
         if SENSOR_CHANNEL.is_full() {
             //remove oldest data
-            debug!("SENSOR_CHANNEL is full, popping oldest data");
+            warn!("SENSOR_CHANNEL is full, popping oldest data");
             SENSOR_CHANNEL.receive().await;
         }
         debug!("Reporting motion data: {:?}", Debug2Format(&data));

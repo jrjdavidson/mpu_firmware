@@ -28,7 +28,7 @@ struct MyService {
     sensor_accel: Vec<u8, 100>,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef2", read, notify, value =Vec::from_slice(&[0;10]).unwrap())]
     sensor_gyro: Vec<u8, 100>,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_MOTION_SAMPLE_INTERVAL_MS)]
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef6", write, read, value = DEFAULT_MOTION_SAMPLE_INTERVAL_MS)]
     motion_sample_interval: u64,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_IDLE_SAMPLE_INTERVAL_MS)]
     idle_sample_interval: u64,

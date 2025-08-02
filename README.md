@@ -1,4 +1,3 @@
-```markdown
 # MPU-6050 BLE Telemetry Firmware
 
 Firmware in 100 percent Rust (`no_std`) for the ESP32-C6.  

@@ -1597,10 +1597,10 @@ dependencies = [
 
 [[package]]
 name = "trouble-host"
-version = "0.1.0"
+version = "0.2.4"
 dependencies = [
  "bt-hci",
- "defmt 0.3.100",
+ "defmt 1.0.1",
  "embassy-futures",
  "embassy-sync 0.7.0",
  "embassy-time",
@@ -1615,7 +1615,7 @@ dependencies = [
 
 [[package]]
 name = "trouble-host-macros"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "convert_case",
  "darling",

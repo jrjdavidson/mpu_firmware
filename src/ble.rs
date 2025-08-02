@@ -117,10 +117,8 @@ async fn gatt_events_task<P: PacketPool>(
     let reason = loop {
         match conn.next().await {
             GattConnectionEvent::Disconnected { reason } => break reason,
-            GattConnectionEvent::Gatt { event: Err(e) } => {
-                warn!("[gatt] error processing event: {:?}", e)
-            }
-            GattConnectionEvent::Gatt { event: Ok(event) } => {
+
+            GattConnectionEvent::Gatt { event } => {
                 match &event {
                     GattEvent::Read(_event) => {
                         // if event.handle() == sensor_imu.handle {
@@ -161,6 +159,7 @@ async fn gatt_events_task<P: PacketPool>(
                         }
                         _ => {}
                     },
+                    _ => {}
                 };
                 // This step is also performed at drop(), but writing it explicitly is necessary
                 // in order to ensure reply is sent.

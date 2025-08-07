@@ -1,15 +1,20 @@
 use crate::shared::{
-    BuzzFrequencyMode, SensorData, BLINK_INTERVAL_MS, BUZZ_FREQUENCY, EPOCH,
-    IDLE_SAMPLE_INTERVAL_MS, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE, MOTION_READ_DURATION_S,
-    MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, SENSOR_CHANNEL, SOUND_METHOD,
+    BuzzFrequencyMode, SensorData, ACCEL_SCALE, BLINK_INTERVAL_MS, BUZZ_FREQUENCY,
+    CONTINUOUS_SAMPLE_INTERVAL_MS, EPOCH, GYRO_SCALE, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE,
+    MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, SENSOR_CHANNEL, SOUND_METHOD,
 };
 use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_time::{Delay, Duration, Instant, Timer, WithTimeout};
 use esp_hal::{gpio::Input, i2c::master::I2c, Async};
 use micromath::F32Ext;
 use mpu6050_dmp::{
-    accel::Accel, address::Address, calibration::CalibrationParameters, error_async::Error,
-    gyro::Gyro, motion::MotionConfig, sensor_async::Mpu6050,
+    accel::{Accel, AccelFullScale},
+    address::Address,
+    calibration::CalibrationParameters,
+    error_async::Error,
+    gyro::{self, Gyro, GyroFullScale},
+    motion::MotionConfig,
+    sensor_async::Mpu6050,
 };
 pub type Sensor<'a> = Mpu6050<I2c<'a, Async>>;
 
@@ -44,11 +49,14 @@ pub async fn configure_sensor<'a>(
     delay: &mut Delay,
 ) -> Result<(), Error<I2c<'a, Async>>> {
     // sensor.initialize_dmp(delay).await?;
-
+    let accel_scale: AccelFullScale = AccelFullScale::G2;
+    ACCEL_SCALE.signal(accel_scale);
+    let gyro_scale = gyro::GyroFullScale::Deg2000;
+    GYRO_SCALE.signal(gyro_scale);
     // Configure calibration parameters
     let calibration_params = CalibrationParameters::new(
-        mpu6050_dmp::accel::AccelFullScale::G2,
-        mpu6050_dmp::gyro::GyroFullScale::Deg2000,
+        accel_scale,
+        gyro_scale,
         mpu6050_dmp::calibration::ReferenceGravity::Zero,
     );
     // sensor
@@ -79,8 +87,10 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
     MAX_BUZZ_VALUE.signal(1000);
     SOUND_METHOD.signal(BuzzFrequencyMode::AccelY);
     let sound_method: BuzzFrequencyMode = SOUND_METHOD.wait().await;
+    let accel_scale: AccelFullScale = ACCEL_SCALE.wait().await;
+    let gyro_scale: GyroFullScale = GYRO_SCALE.wait().await;
     loop {
-        let min_interval = *IDLE_SAMPLE_INTERVAL_MS.lock().await;
+        let min_interval = *CONTINUOUS_SAMPLE_INTERVAL_MS.lock().await;
 
         let wait_start = Instant::now();
         let wait_for_high_result = motion_int
@@ -103,14 +113,15 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
             .await;
         if wait_for_low_result.is_err() || wait_for_high_result.is_err() {
             let sound_method: BuzzFrequencyMode = SOUND_METHOD.try_take().unwrap_or(sound_method);
+            let accel_scale: AccelFullScale = ACCEL_SCALE.try_take().unwrap_or(accel_scale);
+            let gyro_scale: GyroFullScale = GYRO_SCALE.try_take().unwrap_or(gyro_scale);
 
             // timeout reached, continue to next loop iteration
-            sensor = report_motion(sensor, sound_method).await;
+            sensor = report_motion(sensor, sound_method, accel_scale, gyro_scale).await;
             continue;
         }
         let mut start = Instant::now();
 
-        // Loop for 10 seconds
         let duration = *MOTION_READ_DURATION_S.lock().await as u64;
         // Reset the EPOCH to current time
         *EPOCH.lock().await = start.as_millis() as u32;
@@ -118,12 +129,14 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
         BLINK_INTERVAL_MS.signal(10);
 
         let sound_method: BuzzFrequencyMode = SOUND_METHOD.try_take().unwrap_or(sound_method);
+        let accel_scale: AccelFullScale = ACCEL_SCALE.try_take().unwrap_or(accel_scale);
+        let gyro_scale: GyroFullScale = GYRO_SCALE.try_take().unwrap_or(gyro_scale);
 
         PLAY_SOUND.signal(true);
         while Instant::now() - start < Duration::from_secs(duration) {
             // Read current sensor data
             let loop_start = Instant::now();
-            sensor = report_motion(sensor, sound_method).await;
+            sensor = report_motion(sensor, sound_method, accel_scale, gyro_scale).await;
 
             // // Monitor motion while it continues
             let motion_check = sensor.check_motion().await;
@@ -158,15 +171,22 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
     }
 }
 
-async fn report_motion<'a>(mut sensor: Sensor<'a>, sound_method: BuzzFrequencyMode) -> Sensor<'a> {
+async fn report_motion<'a>(
+    mut sensor: Sensor<'a>,
+    sound_method: BuzzFrequencyMode,
+    accel_scale: AccelFullScale,
+    gyro_scale: GyroFullScale,
+) -> Sensor<'a> {
     let motion = sensor.motion6().await;
     if let Ok((accel, gyro)) = motion {
         let frequency = compute_buzz_frequency(&accel, &gyro, sound_method);
         BUZZ_FREQUENCY.signal(frequency);
         let data = SensorData {
+            accel_scale: accel_scale as u8,
             accel_x: accel.x(),
             accel_y: accel.y(),
             accel_z: accel.z(),
+            gyro_scale: gyro_scale as u8,
             gyro_x: gyro.x(),
             gyro_y: gyro.y(),
             gyro_z: gyro.z(),

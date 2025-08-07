@@ -3,11 +3,12 @@ use embassy_futures::join::join;
 use embassy_futures::select::select;
 use embassy_time::Timer;
 use heapless::Vec;
+use mpu6050_dmp::{accel::AccelFullScale, gyro::GyroFullScale};
 use trouble_host::prelude::*;
 
 use crate::shared::{
-    ToBytes, DEFAULT_IDLE_SAMPLE_INTERVAL_MS, DEFAULT_MOTION_READ_DURATION_S,
-    DEFAULT_MOTION_SAMPLE_INTERVAL_MS, IDLE_SAMPLE_INTERVAL_MS, MOTION_READ_DURATION_S,
+    ToBytes, CONTINUOUS_SAMPLE_INTERVAL_MS, DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS,
+    DEFAULT_MOTION_READ_DURATION_S, DEFAULT_MOTION_SAMPLE_INTERVAL_MS, MOTION_READ_DURATION_S,
     MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, SENSOR_CHANNEL,
 };
 
@@ -24,16 +25,20 @@ struct Server {
 }
 #[gatt_service(uuid = "12345678-1234-5678-1234-56789abcdef0")]
 struct MyService {
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef1", read, notify, value =Vec::from_slice(&[0;10]).unwrap())]
-    sensor_accel: Vec<u8, 100>,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef2", read, notify, value =Vec::from_slice(&[0;10]).unwrap())]
-    sensor_gyro: Vec<u8, 100>,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef6", write, read, value = DEFAULT_MOTION_SAMPLE_INTERVAL_MS)]
-    motion_sample_interval: u64,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_IDLE_SAMPLE_INTERVAL_MS)]
-    idle_sample_interval: u64,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef1", read, notify, value = Vec::from_slice(&[0;10]).unwrap())]
+    sensor_accel: Vec<u8, 110>,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef2", read, notify, value = Vec::from_slice(&[0;10]).unwrap())]
+    sensor_gyro: Vec<u8, 110>,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef3", write, read, value = DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS)]
+    continuous_sample_interval: u64,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef4", write, read, value = DEFAULT_MOTION_READ_DURATION_S)]
     motion_read_duration: u16,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef6", write, read, value = DEFAULT_MOTION_SAMPLE_INTERVAL_MS)]
+    motion_sample_interval: u64,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef7", write, read, value = AccelFullScale::G2 as u8)]
+    accel_scale: u8,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef8", write, read, value = GyroFullScale::Deg2000 as u8)]
+    gyro_scale: u8,
     #[characteristic(
         uuid = "12345678-1234-5678-1234-56789abcdef5",
         write,
@@ -112,7 +117,7 @@ async fn gatt_events_task<P: PacketPool>(
     // let sensor_gyro = &server.imu_service.sensor_gyro;
     let motion_read_duration = &server.imu_service.motion_read_duration;
     let motion_sample_interval = &server.imu_service.motion_sample_interval;
-    let idle_sample_interval = &server.imu_service.idle_sample_interval;
+    let idle_sample_interval = &server.imu_service.continuous_sample_interval;
     let play_sound = &server.imu_service.play_sound;
     let reason = loop {
         match conn.next().await {
@@ -142,7 +147,7 @@ async fn gatt_events_task<P: PacketPool>(
                         }
                         h if h == idle_sample_interval.handle => {
                             handle_u64_write(event.data(), |value| async move {
-                                *IDLE_SAMPLE_INTERVAL_MS.lock().await = value as u64;
+                                *CONTINUOUS_SAMPLE_INTERVAL_MS.lock().await = value as u64;
                             })
                             .await;
                         }
@@ -245,8 +250,8 @@ async fn custom_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'
     let sensor_accel = &server.imu_service.sensor_accel;
     let sensor_gyro = &server.imu_service.sensor_gyro;
     let mut buf: Vec<u8, 16> = Vec::new();
-    let mut accel_batch: Vec<u8, 100> = Vec::new();
-    let mut gyro_batch: Vec<u8, 100> = Vec::new();
+    let mut accel_batch: Vec<u8, 110> = Vec::new();
+    let mut gyro_batch: Vec<u8, 110> = Vec::new();
     loop {
         let mut count = 1;
         accel_batch.clear();
@@ -256,21 +261,21 @@ async fn custom_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'
         data.write_to_vec(&mut buf);
         info!("[custom_task] notifying result");
 
-        //timestamp is at 12..16, accel data at 0..6, gyro data at 6..12
-        accel_batch.extend_from_slice(&buf[12..16]).ok();
-        accel_batch.extend_from_slice(&buf[0..6]).ok();
-        gyro_batch.extend_from_slice(&buf[12..16]).ok();
-        gyro_batch.extend_from_slice(&buf[6..12]).ok();
+        //timestamp is at 12..16, accel data at 0..7 (including scale bit at 0), gyro data at 7..14( including scale bit at 7)
+        accel_batch.extend_from_slice(&buf[14..18]).ok();
+        accel_batch.extend_from_slice(&buf[0..7]).ok();
+        gyro_batch.extend_from_slice(&buf[14..18]).ok();
+        gyro_batch.extend_from_slice(&buf[7..14]).ok();
         while count < 10 {
             match SENSOR_CHANNEL.try_receive() {
                 Ok(data) => {
                     buf.clear();
                     data.write_to_vec(&mut buf);
                     //timestamp is at 12..16, accel data at 0..6, gyro data at 6..12
-                    accel_batch.extend_from_slice(&buf[12..16]).ok();
-                    accel_batch.extend_from_slice(&buf[0..6]).ok();
-                    gyro_batch.extend_from_slice(&buf[12..16]).ok();
-                    gyro_batch.extend_from_slice(&buf[6..12]).ok();
+                    accel_batch.extend_from_slice(&buf[14..18]).ok();
+                    accel_batch.extend_from_slice(&buf[0..7]).ok();
+                    gyro_batch.extend_from_slice(&buf[14..18]).ok();
+                    gyro_batch.extend_from_slice(&buf[7..14]).ok();
                     count += 1;
                 }
                 Err(_) => break, // Channel empty

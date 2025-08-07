@@ -4,15 +4,19 @@ use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use heapless::Vec;
+use mpu6050_dmp::accel::AccelFullScale;
+use mpu6050_dmp::gyro::GyroFullScale;
 
 #[derive(Debug, Format)]
 pub struct SensorData {
     pub accel_x: i16,
     pub accel_y: i16,
     pub accel_z: i16,
+    pub accel_scale: u8,
     pub gyro_x: i16,
     pub gyro_y: i16,
     pub gyro_z: i16,
+    pub gyro_scale: u8,
     pub timestamp_ms: u32, // Milliseconds since boot - will overflow after ~49 days
 }
 impl SensorData {
@@ -21,9 +25,11 @@ impl SensorData {
             accel_x: 0,
             accel_y: 0,
             accel_z: 0,
+            accel_scale: 0,
             gyro_x: 0,
             gyro_y: 0,
             gyro_z: 0,
+            gyro_scale: 0,
             timestamp_ms: 0,
         }
     }
@@ -51,15 +57,15 @@ impl ToBytes for SensorData {
     }
 }
 pub const DEFAULT_MOTION_SAMPLE_INTERVAL_MS: u64 = 10;
-pub const DEFAULT_IDLE_SAMPLE_INTERVAL_MS: u64 = 60000;
+pub const DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS: u64 = 60000;
 pub const DEFAULT_MOTION_READ_DURATION_S: u16 = 5;
 
 pub static SENSOR_CHANNEL: Channel<CriticalSectionRawMutex, SensorData, 100> = Channel::new();
 pub static BLINK_INTERVAL_MS: Signal<CriticalSectionRawMutex, u64> = Signal::new();
 pub static MOTION_SAMPLE_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =
     Mutex::new(DEFAULT_MOTION_SAMPLE_INTERVAL_MS);
-pub static IDLE_SAMPLE_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =
-    Mutex::new(DEFAULT_IDLE_SAMPLE_INTERVAL_MS);
+pub static CONTINUOUS_SAMPLE_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =
+    Mutex::new(DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS);
 pub static MOTION_READ_DURATION_S: Mutex<CriticalSectionRawMutex, u16> =
     Mutex::new(DEFAULT_MOTION_READ_DURATION_S);
 pub static EPOCH: Mutex<CriticalSectionRawMutex, u32> = Mutex::new(0);
@@ -68,6 +74,8 @@ pub static MIN_BUZZ_VALUE: Signal<CriticalSectionRawMutex, u32> = Signal::new();
 pub static MAX_BUZZ_VALUE: Signal<CriticalSectionRawMutex, u32> = Signal::new();
 pub static PLAY_SOUND: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 pub static SOUND_METHOD: Signal<CriticalSectionRawMutex, BuzzFrequencyMode> = Signal::new();
+pub static ACCEL_SCALE: Signal<CriticalSectionRawMutex, AccelFullScale> = Signal::new();
+pub static GYRO_SCALE: Signal<CriticalSectionRawMutex, GyroFullScale> = Signal::new();
 
 #[derive(Clone, Copy, Debug)]
 pub enum BuzzFrequencyMode {

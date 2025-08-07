@@ -38,7 +38,6 @@ esp-hal-embassy = { version = "0.9.0", features = ["defmt", "esp32c6"] }
 panic-rtt-target = { version = "0.2.0", features = ["defmt"] }
 rtt-target = { version = "0.6.1", features = ["defmt"] }
 static_cell = { version = "2.1.1", features = ["nightly"] }
-trouble-host = { path = "../trouble/host/", features = ["gatt", "defmt"] }
 embassy-futures = "0.1.1"
 heapless = "0.8.0"
 mpu6050-dmp = { version = "0.6.0", features = ["async", "defmt-03"] }
@@ -52,6 +51,7 @@ esp-wifi = { version = "0.15.0", features = [
   "esp-alloc",
   "esp32c6",
 ] }
+trouble-host = { version = "0.2.4", features = ["gatt", "defmt"] }
 
 [dev-dependencies]
 embedded-test = { version = "0.6.0", features = [

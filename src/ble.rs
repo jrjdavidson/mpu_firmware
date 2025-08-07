@@ -7,9 +7,9 @@ use mpu6050_dmp::{accel::AccelFullScale, gyro::GyroFullScale};
 use trouble_host::prelude::*;
 
 use crate::shared::{
-    ToBytes, CONTINUOUS_SAMPLE_INTERVAL_MS, DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS,
-    DEFAULT_MOTION_READ_DURATION_S, DEFAULT_MOTION_SAMPLE_INTERVAL_MS, MOTION_READ_DURATION_S,
-    MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, SENSOR_CHANNEL,
+    ToBytes, ACCEL_SCALE, CONTINUOUS_SAMPLE_INTERVAL_MS, DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS,
+    DEFAULT_MOTION_READ_DURATION_S, DEFAULT_MOTION_SAMPLE_INTERVAL_MS, GYRO_SCALE,
+    MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, SENSOR_CHANNEL,
 };
 
 /// Max number of connections
@@ -119,6 +119,8 @@ async fn gatt_events_task<P: PacketPool>(
     let motion_sample_interval = &server.imu_service.motion_sample_interval;
     let idle_sample_interval = &server.imu_service.continuous_sample_interval;
     let play_sound = &server.imu_service.play_sound;
+    let accel_scale = &server.imu_service.accel_scale;
+    let gyro_scale = &server.imu_service.gyro_scale;
     let reason = loop {
         match conn.next().await {
             GattConnectionEvent::Disconnected { reason } => break reason,
@@ -155,6 +157,28 @@ async fn gatt_events_task<P: PacketPool>(
                             let data = event.data();
                             if data.len() == 1 {
                                 PLAY_SOUND.signal(data[0] != 0);
+                            } else {
+                                warn!(
+                                    "[gatt] Write Event: invalid data length for u16: {:?}",
+                                    data
+                                );
+                            }
+                        }
+                        h if h == gyro_scale.handle => {
+                            let data = event.data();
+                            if data.len() == 1 {
+                                GYRO_SCALE.signal(data[0]);
+                            } else {
+                                warn!(
+                                    "[gatt] Write Event: invalid data length for u16: {:?}",
+                                    data
+                                );
+                            }
+                        }
+                        h if h == accel_scale.handle => {
+                            let data = event.data();
+                            if data.len() == 1 {
+                                ACCEL_SCALE.signal(data[0]);
                             } else {
                                 warn!(
                                     "[gatt] Write Event: invalid data length for u16: {:?}",

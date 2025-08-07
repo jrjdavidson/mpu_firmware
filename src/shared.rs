@@ -4,8 +4,6 @@ use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use heapless::Vec;
-use mpu6050_dmp::accel::AccelFullScale;
-use mpu6050_dmp::gyro::GyroFullScale;
 
 #[derive(Debug, Format)]
 pub struct SensorData {
@@ -74,8 +72,8 @@ pub static MIN_BUZZ_VALUE: Signal<CriticalSectionRawMutex, u32> = Signal::new();
 pub static MAX_BUZZ_VALUE: Signal<CriticalSectionRawMutex, u32> = Signal::new();
 pub static PLAY_SOUND: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 pub static SOUND_METHOD: Signal<CriticalSectionRawMutex, BuzzFrequencyMode> = Signal::new();
-pub static ACCEL_SCALE: Signal<CriticalSectionRawMutex, AccelFullScale> = Signal::new();
-pub static GYRO_SCALE: Signal<CriticalSectionRawMutex, GyroFullScale> = Signal::new();
+pub static ACCEL_SCALE: Signal<CriticalSectionRawMutex, u8> = Signal::new();
+pub static GYRO_SCALE: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 
 #[derive(Clone, Copy, Debug)]
 pub enum BuzzFrequencyMode {

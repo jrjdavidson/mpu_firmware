@@ -1,3 +1,10 @@
+use crate::sensor::config::BuzzFrequencyMode;
+use crate::shared::{
+    ToBytes, ACCEL_SCALE, BUZZ_FREQUENCY_MODE, CONTINUOUS_SAMPLE_INTERVAL_MS,
+    DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS, DEFAULT_MOTION_READ_DURATION_S,
+    DEFAULT_MOTION_SAMPLE_INTERVAL_MS, GYRO_SCALE, MOTION_READ_DURATION_S,
+    MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, SENSOR_CHANNEL,
+};
 use defmt::{error, info, warn};
 use embassy_futures::join::join;
 use embassy_futures::select::select;
@@ -5,12 +12,6 @@ use embassy_time::Timer;
 use heapless::Vec;
 use mpu6050_dmp::{accel::AccelFullScale, gyro::GyroFullScale};
 use trouble_host::prelude::*;
-
-use crate::shared::{
-    ToBytes, ACCEL_SCALE, CONTINUOUS_SAMPLE_INTERVAL_MS, DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS,
-    DEFAULT_MOTION_READ_DURATION_S, DEFAULT_MOTION_SAMPLE_INTERVAL_MS, GYRO_SCALE,
-    MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, SENSOR_CHANNEL,
-};
 
 /// Max number of connections
 const CONNECTIONS_MAX: usize = 2;
@@ -39,6 +40,8 @@ struct MyService {
     accel_scale: u8,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef8", write, read, value = GyroFullScale::Deg2000 as u8)]
     gyro_scale: u8,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdef9", write, read, value = BuzzFrequencyMode::AccelX as u8)]
+    buzz_frequency_mode: u8,
     #[characteristic(
         uuid = "12345678-1234-5678-1234-56789abcdef5",
         write,
@@ -121,6 +124,7 @@ async fn gatt_events_task<P: PacketPool>(
     let play_sound = &server.imu_service.play_sound;
     let accel_scale = &server.imu_service.accel_scale;
     let gyro_scale = &server.imu_service.gyro_scale;
+    let buzz_frequency_mode = &server.imu_service.buzz_frequency_mode;
     let reason = loop {
         match conn.next().await {
             GattConnectionEvent::Disconnected { reason } => break reason,
@@ -154,38 +158,20 @@ async fn gatt_events_task<P: PacketPool>(
                             .await;
                         }
                         h if h == play_sound.handle => {
-                            let data = event.data();
-                            if data.len() == 1 {
-                                PLAY_SOUND.signal(data[0] != 0);
-                            } else {
-                                warn!(
-                                    "[gatt] Write Event: invalid data length for u16: {:?}",
-                                    data
-                                );
-                            }
+                            handle_u8_write(event.data(), |value| PLAY_SOUND.signal(value != 0));
                         }
                         h if h == gyro_scale.handle => {
-                            let data = event.data();
-                            if data.len() == 1 {
-                                GYRO_SCALE.signal(data[0]);
-                            } else {
-                                warn!(
-                                    "[gatt] Write Event: invalid data length for u16: {:?}",
-                                    data
-                                );
-                            }
+                            handle_u8_write(event.data(), |value| GYRO_SCALE.signal(value));
                         }
                         h if h == accel_scale.handle => {
-                            let data = event.data();
-                            if data.len() == 1 {
-                                ACCEL_SCALE.signal(data[0]);
-                            } else {
-                                warn!(
-                                    "[gatt] Write Event: invalid data length for u16: {:?}",
-                                    data
-                                );
-                            }
+                            handle_u8_write(event.data(), |value| ACCEL_SCALE.signal(value));
                         }
+                        h if h == buzz_frequency_mode.handle => {
+                            handle_u8_write(event.data(), |value| {
+                                BUZZ_FREQUENCY_MODE.signal(value.into())
+                            });
+                        }
+
                         _ => {}
                     },
                     _ => {}
@@ -202,6 +188,17 @@ async fn gatt_events_task<P: PacketPool>(
     };
     info!("[gatt] disconnected: {:?}", reason);
     Ok(())
+}
+
+fn handle_u8_write<F>(data: &[u8], signal_fn: F)
+where
+    F: Fn(u8),
+{
+    if data.len() == 1 {
+        signal_fn(data[0]);
+    } else {
+        warn!("[gatt] Write Event: invalid data length for u8: {:?}", data);
+    }
 }
 
 // Helper function for u16 GATT writes
@@ -273,7 +270,7 @@ async fn advertise<'values, 'server, C: Controller>(
 async fn custom_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'_, '_, P>) {
     let sensor_accel = &server.imu_service.sensor_accel;
     let sensor_gyro = &server.imu_service.sensor_gyro;
-    let mut buf: Vec<u8, 16> = Vec::new();
+    let mut buf: Vec<u8, 18> = Vec::new();
     let mut accel_batch: Vec<u8, 110> = Vec::new();
     let mut gyro_batch: Vec<u8, 110> = Vec::new();
     loop {
@@ -295,7 +292,6 @@ async fn custom_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'
                 Ok(data) => {
                     buf.clear();
                     data.write_to_vec(&mut buf);
-                    //timestamp is at 12..16, accel data at 0..6, gyro data at 6..12
                     accel_batch.extend_from_slice(&buf[14..18]).ok();
                     accel_batch.extend_from_slice(&buf[0..7]).ok();
                     gyro_batch.extend_from_slice(&buf[14..18]).ok();

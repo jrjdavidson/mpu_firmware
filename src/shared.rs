@@ -5,6 +5,8 @@ use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use heapless::Vec;
 
+use crate::sensor::config::BuzzFrequencyMode;
+
 #[derive(Debug, Format)]
 pub struct SensorData {
     pub accel_x: i16,
@@ -33,24 +35,30 @@ impl SensorData {
     }
 }
 pub trait ToBytes {
-    fn write_to_vec(&self, vec: &mut Vec<u8, 16>);
+    fn write_to_vec(&self, vec: &mut Vec<u8, 18>);
 }
 
 impl ToBytes for SensorData {
-    fn write_to_vec(&self, vec: &mut Vec<u8, 16>) {
+    fn write_to_vec(&self, vec: &mut Vec<u8, 18>) {
         vec.clear();
-        for &val in [
-            self.accel_x,
-            self.accel_y,
-            self.accel_z,
-            self.gyro_x,
-            self.gyro_y,
-            self.gyro_z,
-        ]
-        .iter()
-        {
-            vec.extend_from_slice(&val.to_le_bytes()).ok();
-        }
+
+        // accel_scale (u8)
+        vec.push(self.accel_scale).ok();
+
+        // accel_x/y/z (i16)
+        vec.extend_from_slice(&self.accel_x.to_le_bytes()).ok();
+        vec.extend_from_slice(&self.accel_y.to_le_bytes()).ok();
+        vec.extend_from_slice(&self.accel_z.to_le_bytes()).ok();
+
+        // gyro_scale (u8)
+        vec.push(self.gyro_scale).ok();
+
+        // gyro_x/y/z (i16)
+        vec.extend_from_slice(&self.gyro_x.to_le_bytes()).ok();
+        vec.extend_from_slice(&self.gyro_y.to_le_bytes()).ok();
+        vec.extend_from_slice(&self.gyro_z.to_le_bytes()).ok();
+
+        // timestamp_ms (u32)
         vec.extend_from_slice(&self.timestamp_ms.to_le_bytes()).ok();
     }
 }
@@ -68,21 +76,9 @@ pub static MOTION_READ_DURATION_S: Mutex<CriticalSectionRawMutex, u16> =
     Mutex::new(DEFAULT_MOTION_READ_DURATION_S);
 pub static EPOCH: Mutex<CriticalSectionRawMutex, u32> = Mutex::new(0);
 pub static BUZZ_FREQUENCY: Signal<CriticalSectionRawMutex, u32> = Signal::new();
+pub static BUZZ_FREQUENCY_MODE: Signal<CriticalSectionRawMutex, BuzzFrequencyMode> = Signal::new();
 pub static MIN_BUZZ_VALUE: Signal<CriticalSectionRawMutex, u32> = Signal::new();
 pub static MAX_BUZZ_VALUE: Signal<CriticalSectionRawMutex, u32> = Signal::new();
 pub static PLAY_SOUND: Signal<CriticalSectionRawMutex, bool> = Signal::new();
-pub static SOUND_METHOD: Signal<CriticalSectionRawMutex, BuzzFrequencyMode> = Signal::new();
 pub static ACCEL_SCALE: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 pub static GYRO_SCALE: Signal<CriticalSectionRawMutex, u8> = Signal::new();
-
-#[derive(Clone, Copy, Debug)]
-pub enum BuzzFrequencyMode {
-    AccelX,
-    AccelY,
-    AccelZ,
-    GyroX,
-    GyroY,
-    GyroZ,
-    AccelMagnitude,
-    GyroMagnitude,
-}

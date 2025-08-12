@@ -8,7 +8,7 @@ use embassy_time::Timer;
 use heapless::Vec;
 use trouble_host::{gatt::GattConnection, PacketPool};
 
-pub async fn notify_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'_, '_, P>) {
+pub async fn run_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<'_, '_, P>) {
     let sensor_accel = &server.imu_service.sensor_accel;
     let sensor_gyro = &server.imu_service.sensor_gyro;
     let mut buf: Vec<u8, 18> = Vec::new();

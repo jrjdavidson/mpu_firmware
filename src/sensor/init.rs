@@ -1,5 +1,5 @@
 use crate::{
-    sensor::Sensor,
+    sensor::{error::SensorInitError, Sensor},
     shared::{ACCEL_SCALE, GYRO_SCALE},
 };
 use defmt::info;
@@ -7,13 +7,11 @@ use embassy_time::Delay;
 use esp_hal::{i2c::master::I2c, Async};
 use mpu6050_dmp::{
     accel::AccelFullScale, address::Address, calibration::CalibrationParameters,
-    error_async::Error, gyro::GyroFullScale, motion::MotionConfig, sensor_async::Mpu6050,
+    gyro::GyroFullScale, motion::MotionConfig, sensor_async::Mpu6050,
 };
 
-pub async fn initialize_sensor<'a>(
-    i2c: I2c<'a, Async>,
-) -> Result<Sensor<'a>, Error<I2c<'a, Async>>> {
-    let mut sensor = Mpu6050::new(i2c, Address::default()).await.unwrap();
+pub async fn initialize_sensor<'a>(i2c: I2c<'a, Async>) -> Result<Sensor<'a>, SensorInitError<'a>> {
+    let mut sensor = Mpu6050::new(i2c, Address::default()).await?;
 
     info!("MPU6050-DMP Sensor Initialized");
     // Configure sensor settings
@@ -32,14 +30,17 @@ pub async fn initialize_sensor<'a>(
         .await?;
 
     // Set sample rate to 1kHz (1ms period)
-    sensor.set_sample_rate_divider(0).await?;
+    sensor
+        .set_sample_rate_divider(0)
+        .await
+        .map_err(SensorInitError::Config)?;
     Ok(sensor)
 }
 
 pub async fn configure_sensor<'a>(
     sensor: &mut Mpu6050<I2c<'a, Async>>,
     delay: &mut Delay,
-) -> Result<(), Error<I2c<'a, Async>>> {
+) -> Result<(), SensorInitError<'a>> {
     // sensor.initialize_dmp(delay).await?;
     let accel_scale = AccelFullScale::G2;
     ACCEL_SCALE.signal(accel_scale as u8);
@@ -51,10 +52,7 @@ pub async fn configure_sensor<'a>(
         gyro_scale,
         mpu6050_dmp::calibration::ReferenceGravity::Zero,
     );
-    // sensor
-    //     .set_accel_calibration(&Accel::new(0, 0, 0))
-    //     .await
-    //     .?();
+
     info!("Calibrating Sensor");
     sensor.calibrate(delay, &calibration_params).await?;
 

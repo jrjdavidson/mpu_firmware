@@ -16,7 +16,7 @@ pub async fn gatt_events_task<P: PacketPool>(
 ) -> Result<(), Error> {
     let motion_read_duration = &server.imu_service.motion_read_duration;
     let motion_sample_interval = &server.imu_service.motion_sample_interval;
-    let idle_sample_interval = &server.imu_service.continuous_sample_interval;
+    let continuous_sample_interval = &server.imu_service.continuous_sample_interval;
     let play_sound = &server.imu_service.play_sound;
     let accel_scale = &server.imu_service.accel_scale;
     let gyro_scale = &server.imu_service.gyro_scale;
@@ -46,7 +46,7 @@ pub async fn gatt_events_task<P: PacketPool>(
                             })
                             .await;
                         }
-                        h if h == idle_sample_interval.handle => {
+                        h if h == continuous_sample_interval.handle => {
                             handle_u64_write(event.data(), |value| async move {
                                 *CONTINUOUS_SAMPLE_INTERVAL_MS.lock().await = value as u64;
                             })

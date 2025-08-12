@@ -1,6 +1,10 @@
 use crate::{
-    sensor::{error::SensorInitError, Sensor},
-    shared::{ACCEL_SCALE, GYRO_SCALE},
+    sensor::{
+        config::{BuzzFrequencyMode, SensorConfig},
+        error::SensorInitError,
+        Sensor,
+    },
+    shared::{ACCEL_SCALE, BUZZ_FREQUENCY_MODE, GYRO_SCALE, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE},
 };
 use defmt::info;
 use embassy_time::Delay;
@@ -40,7 +44,7 @@ pub async fn initialize_sensor<'a>(i2c: I2c<'a, Async>) -> Result<Sensor<'a>, Se
 pub async fn configure_sensor<'a>(
     sensor: &mut Mpu6050<I2c<'a, Async>>,
     delay: &mut Delay,
-) -> Result<(), SensorInitError<'a>> {
+) -> Result<SensorConfig, SensorInitError<'a>> {
     // sensor.initialize_dmp(delay).await?;
     let accel_scale = AccelFullScale::G2;
     ACCEL_SCALE.signal(accel_scale as u8);
@@ -65,7 +69,19 @@ pub async fn configure_sensor<'a>(
     };
     sensor.configure_motion_detection(&motion_config).await?;
     sensor.enable_motion_interrupt().await?;
-    Ok(())
+    BUZZ_FREQUENCY_MODE.signal(BuzzFrequencyMode::AccelX);
+    let min_buzz_value = 10;
+    MIN_BUZZ_VALUE.signal(min_buzz_value);
+    let max_buzz_value = 1000;
+    MAX_BUZZ_VALUE.signal(max_buzz_value);
+    let sensor_config = SensorConfig {
+        accel_scale: ACCEL_SCALE.wait().await,
+        gyro_scale: GYRO_SCALE.wait().await,
+        buzz_frequency_mode: BUZZ_FREQUENCY_MODE.wait().await,
+        min_buzz_value: min_buzz_value, // is "waited" in the buzzer thread
+        max_buzz_value: max_buzz_value, // is "waited" in the buzzer thread
+    };
+    Ok(sensor_config)
 }
 
 #[cfg(test)]

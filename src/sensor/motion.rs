@@ -4,32 +4,26 @@ use esp_hal::gpio::Input;
 
 use crate::{
     sensor::{
-        config::{compute_buzz_frequency, update_sensor_settings, BuzzFrequencyMode, SensorConfig},
+        config::{compute_buzz_frequency, update_sensor_settings, SensorConfig},
         Sensor,
     },
     shared::{
-        SensorData, ACCEL_SCALE, BLINK_INTERVAL_MS, BUZZ_FREQUENCY, BUZZ_FREQUENCY_MODE,
-        CONTINUOUS_SAMPLE_INTERVAL_MS, EPOCH, GYRO_SCALE, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE,
-        MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, SENSOR_CHANNEL,
+        SensorData, BLINK_INTERVAL_MS, BUZZ_FREQUENCY, CONTINUOUS_SAMPLE_INTERVAL_MS, EPOCH,
+        MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, SENSOR_CHANNEL,
     },
 };
 
 #[embassy_executor::task]
-pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input<'static>) {
+pub async fn motion_detection(
+    mut sensor: Sensor<'static>,
+    mut sensor_config: SensorConfig,
+    mut motion_int: Input<'static>,
+) {
     // Before entering cyclic measurement, make sure the Interrupt Pin is high
     info!("Starting motion detection");
     // Main loop monitoring motion detection events
-    MIN_BUZZ_VALUE.signal(0);
-    MAX_BUZZ_VALUE.signal(1000);
-    BUZZ_FREQUENCY_MODE.signal(BuzzFrequencyMode::AccelX);
     info!("Waiting for motion detection interrupt to be ready");
-    let mut sensor_config = SensorConfig {
-        accel_scale: ACCEL_SCALE.wait().await,
-        gyro_scale: GYRO_SCALE.wait().await,
-        buzz_frequency_mode: BUZZ_FREQUENCY_MODE.wait().await,
-        min_buzz_value: MIN_BUZZ_VALUE.wait().await,
-        max_buzz_value: MAX_BUZZ_VALUE.wait().await,
-    };
+
     loop {
         info!("Waiting for motion detection interrupt");
         let min_interval = *CONTINUOUS_SAMPLE_INTERVAL_MS.lock().await;
@@ -70,7 +64,6 @@ pub async fn motion_detection(mut sensor: Sensor<'static>, mut motion_int: Input
 
         update_sensor_settings(&mut sensor, &mut sensor_config).await;
 
-        PLAY_SOUND.signal(false);
         while Instant::now() - start < Duration::from_secs(duration) {
             // Read current sensor data
             let loop_start = Instant::now();

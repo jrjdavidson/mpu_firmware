@@ -84,22 +84,27 @@ async fn main(spawner: Spawner) {
     };
     let mut delay = Delay;
     BLINK_INTERVAL_MS.signal(200);
-    let sensor_config = configure_sensor(&mut sensor, &mut delay).await;
-    match sensor_config {
-        Ok(_) => info!("Sensor configured successfully"),
+    let sensor_config_result = configure_sensor(&mut sensor, &mut delay).await;
+    let sensor_config = match sensor_config_result {
+        Ok(sensor_config) => {
+            info!("Sensor configured successfully");
+            sensor_config
+        }
         Err(e) => {
             info!("Failed to configure sensor: {:?}", e);
             BLINK_INTERVAL_MS.signal(100);
 
             return;
         }
-    }
+    };
     BLINK_INTERVAL_MS.signal(1000);
 
     spawner
         .spawn(buzzer::buzzer_task(ledc, buzzer_gpio.into()))
         .ok();
 
-    spawner.spawn(motion_detection(sensor, motion_int)).ok();
+    spawner
+        .spawn(motion_detection(sensor, sensor_config, motion_int))
+        .ok();
     ble::run(ble_controller).await;
 }

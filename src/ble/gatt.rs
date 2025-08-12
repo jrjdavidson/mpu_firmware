@@ -54,7 +54,13 @@ pub struct MyService {
         value = DEFAULT_MOTION_READ_DURATION_S
     )]
     pub motion_read_duration: u16,
-
+    #[characteristic(
+        uuid = "12345678-1234-5678-1234-56789abcdef5",
+        write,
+        read,
+        value = false
+    )]
+    pub play_sound: bool,
     #[characteristic(
         uuid = "12345678-1234-5678-1234-56789abcdef6",
         write,
@@ -86,12 +92,8 @@ pub struct MyService {
         value = BuzzFrequencyMode::AccelX as u8
     )]
     pub buzz_frequency_mode: u8,
-
-    #[characteristic(
-        uuid = "12345678-1234-5678-1234-56789abcdef5",
-        write,
-        read,
-        value = false
-    )]
-    pub play_sound: bool,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefa", write, read, value = 0)]
+    pub min_buzz_value: u32,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefb", write, read, value = 0)]
+    pub max_buzz_value: u32,
 }

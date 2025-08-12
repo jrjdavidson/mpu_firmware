@@ -3,8 +3,8 @@ use trouble_host::prelude::*;
 
 use super::gatt::Server;
 use crate::shared::{
-    ACCEL_SCALE, BUZZ_FREQUENCY_MODE, CONTINUOUS_SAMPLE_INTERVAL_MS, GYRO_SCALE,
-    MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND,
+    ACCEL_SCALE, BUZZ_FREQUENCY_MODE, CONTINUOUS_SAMPLE_INTERVAL_MS, GYRO_SCALE, MAX_BUZZ_VALUE,
+    MIN_BUZZ_VALUE, MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND,
 };
 
 /// Stream Events until the connection closes.
@@ -21,6 +21,8 @@ pub async fn gatt_events_task<P: PacketPool>(
     let accel_scale = &server.imu_service.accel_scale;
     let gyro_scale = &server.imu_service.gyro_scale;
     let buzz_frequency_mode = &server.imu_service.buzz_frequency_mode;
+    let min_buzz_value = &server.imu_service.min_buzz_value;
+    let max_buzz_value = &server.imu_service.max_buzz_value;
 
     let reason = loop {
         match conn.next().await {
@@ -64,6 +66,12 @@ pub async fn gatt_events_task<P: PacketPool>(
                                 BUZZ_FREQUENCY_MODE.signal(value.into())
                             });
                         }
+                        h if h == min_buzz_value.handle => {
+                            handle_u32_write(event.data(), |value| MIN_BUZZ_VALUE.signal(value));
+                        }
+                        h if h == max_buzz_value.handle => {
+                            handle_u32_write(event.data(), |value| MAX_BUZZ_VALUE.signal(value));
+                        }
                         _ => {}
                     },
                     _ => {}
@@ -100,7 +108,7 @@ where
 {
     if data.len() == 2 {
         let value = u16::from_le_bytes([data[0], data[1]]);
-        f(value).await;
+        f(value);
     } else {
         warn!(
             "[gatt] Write Event: invalid data length for u16: {:?}",
@@ -108,7 +116,20 @@ where
         );
     }
 }
-
+fn handle_u32_write<F>(data: &[u8], f: F)
+where
+    F: Fn(u32),
+{
+    if data.len() == 4 {
+        let value = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+        f(value);
+    } else {
+        warn!(
+            "[gatt] Write Event: invalid data length for u32: {:?}",
+            data
+        );
+    }
+}
 async fn handle_u64_write<F, Fut>(data: &[u8], mut f: F)
 where
     F: FnMut(u64) -> Fut,

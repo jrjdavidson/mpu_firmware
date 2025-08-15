@@ -6,7 +6,14 @@ use mpu6050_dmp::{
 
 use crate::{
     sensor::Sensor,
-    shared::{ACCEL_SCALE, BUZZ_FREQUENCY_MODE, GYRO_SCALE, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE},
+    shared::{
+        ACCEL_SCALE,
+        BUZZ_FREQUENCY_MODE,
+        GYRO_SCALE,
+        MAX_BUZZ_VALUE,
+        MIN_BUZZ_VALUE,
+        //SENSOR_CHANNEL,
+    },
 };
 pub struct SensorConfig {
     pub accel_scale: u8,
@@ -30,6 +37,7 @@ impl SensorConfig {
             let afs = AccelFullScale::from_u8(new_accel).unwrap_or(AccelFullScale::G2);
             sensor.set_accel_full_scale(afs).await.unwrap();
             self.accel_scale = new_accel;
+            //SENSOR_CHANNEL.clear();//not sure if needed?
         }
     }
     pub async fn apply_gyro_scale<'a>(
@@ -41,6 +49,7 @@ impl SensorConfig {
             let gfs = GyroFullScale::from_u8(new_gyro).unwrap_or(GyroFullScale::Deg2000);
             sensor.set_gyro_full_scale(gfs).await.unwrap();
             self.gyro_scale = new_gyro;
+            //SENSOR_CHANNEL.clear();//not sure if needed?
         }
     }
     pub fn apply_max_buzz_value(&mut self, max_source: &mut Option<f32>) {

@@ -61,7 +61,7 @@ pub async fn configure_sensor<'a>(
     sensor.calibrate(delay, &calibration_params).await?;
 
     info!("Sensor Calibrated");
-    let motion_detection_enabled = false;
+    let motion_detection_enabled = true;
     if !motion_detection_enabled {
         let motion_config = MotionConfig {
             threshold: 2,

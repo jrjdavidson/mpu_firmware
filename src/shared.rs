@@ -82,3 +82,5 @@ pub static MAX_BUZZ_VALUE: Signal<CriticalSectionRawMutex, f32> = Signal::new();
 pub static PLAY_SOUND: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 pub static ACCEL_SCALE: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 pub static GYRO_SCALE: Signal<CriticalSectionRawMutex, u8> = Signal::new();
+pub static READ: Signal<CriticalSectionRawMutex, bool> = Signal::new();
+pub static MARK_EPOCH: Signal<CriticalSectionRawMutex, ()> = Signal::new();

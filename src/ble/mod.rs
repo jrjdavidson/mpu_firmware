@@ -1,5 +1,6 @@
 pub mod events;
 pub mod gatt;
+pub mod handler_macros;
 pub mod notify_task;
 use defmt::{error, info};
 use embassy_futures::join::join;

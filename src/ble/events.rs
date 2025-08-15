@@ -6,7 +6,7 @@ use crate::shared::{
     ACCEL_SCALE, BUZZ_FREQUENCY_MODE, CONTINUOUS_SAMPLE_INTERVAL_MS, GYRO_SCALE, MAX_BUZZ_VALUE,
     MIN_BUZZ_VALUE, MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND,
 };
-
+use crate::{define_async_write_handler, define_write_handler};
 /// Stream Events until the connection closes.
 ///
 /// Handles GATT events (especially Writes) and updates shared runtime config/signals.
@@ -67,10 +67,10 @@ pub async fn gatt_events_task<P: PacketPool>(
                             });
                         }
                         h if h == min_buzz_value.handle => {
-                            handle_u32_write(event.data(), |value| MIN_BUZZ_VALUE.signal(value));
+                            handle_f32_write(event.data(), |value| MIN_BUZZ_VALUE.signal(value));
                         }
                         h if h == max_buzz_value.handle => {
-                            handle_u32_write(event.data(), |value| MAX_BUZZ_VALUE.signal(value));
+                            handle_f32_write(event.data(), |value| MAX_BUZZ_VALUE.signal(value));
                         }
                         _ => {}
                     },
@@ -90,60 +90,16 @@ pub async fn gatt_events_task<P: PacketPool>(
     Ok(())
 }
 
-fn handle_u8_write<F>(data: &[u8], signal_fn: F)
-where
-    F: Fn(u8),
-{
-    if data.len() == 1 {
-        signal_fn(data[0]);
-    } else {
-        warn!("[gatt] Write Event: invalid data length for u8: {:?}", data);
-    }
-}
+define_write_handler!(handle_u8_write, u8, 1, |d: &[u8]| d[0]);
 
-async fn handle_u16_write<F, Fut>(data: &[u8], mut f: F)
-where
-    F: FnMut(u16) -> Fut,
-    Fut: core::future::Future<Output = ()>,
-{
-    if data.len() == 2 {
-        let value = u16::from_le_bytes([data[0], data[1]]);
-        f(value);
-    } else {
-        warn!(
-            "[gatt] Write Event: invalid data length for u16: {:?}",
-            data
-        );
-    }
-}
-fn handle_u32_write<F>(data: &[u8], f: F)
-where
-    F: Fn(u32),
-{
-    if data.len() == 4 {
-        let value = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
-        f(value);
-    } else {
-        warn!(
-            "[gatt] Write Event: invalid data length for u32: {:?}",
-            data
-        );
-    }
-}
-async fn handle_u64_write<F, Fut>(data: &[u8], mut f: F)
-where
-    F: FnMut(u64) -> Fut,
-    Fut: core::future::Future<Output = ()>,
-{
-    if data.len() == 8 {
-        let value = u64::from_le_bytes([
-            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
-        ]);
-        f(value).await;
-    } else {
-        warn!(
-            "[gatt] Write Event: invalid data length for u64: {:?}",
-            data
-        );
-    }
-}
+define_write_handler!(handle_f32_write, f32, 4, |d: &[u8]| f32::from_le_bytes([
+    d[0], d[1], d[2], d[3]
+]));
+
+define_async_write_handler!(handle_u16_write, u16, 2, |d: &[u8]| u16::from_le_bytes([
+    d[0], d[1]
+]));
+
+define_async_write_handler!(handle_u64_write, u64, 8, |d: &[u8]| u64::from_le_bytes([
+    d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]
+]));

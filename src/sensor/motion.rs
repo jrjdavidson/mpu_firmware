@@ -98,15 +98,15 @@ pub async fn motion_detection(
         }
         info!("No more motion detected");
         BLINK_INTERVAL_MS.signal(1000);
-        BUZZ_FREQUENCY.signal(0); // Stop buzzer
+        BUZZ_FREQUENCY.signal(0.0); // Stop buzzer
     }
 }
 
 async fn report_motion<'a>(mut sensor: Sensor<'a>, sensor_config: &SensorConfig) -> Sensor<'a> {
     let motion = sensor.motion6().await;
     if let Ok((accel, gyro)) = motion {
-        let frequency =
-            compute_buzz_frequency(&accel, &gyro, sensor_config.buzz_frequency_mode.into());
+        let frequency = compute_buzz_frequency(&accel, &gyro, &sensor_config);
+
         BUZZ_FREQUENCY.signal(frequency);
         let data = SensorData {
             accel_scale: sensor_config.accel_scale,

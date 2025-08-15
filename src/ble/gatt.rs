@@ -92,8 +92,18 @@ pub struct MyService {
         value = BuzzFrequencyMode::AccelX as u8
     )]
     pub buzz_frequency_mode: u8,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefa", write, read, value = 0)]
-    pub min_buzz_value: u32,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefb", write, read, value = 0)]
-    pub max_buzz_value: u32,
+    #[characteristic(
+        uuid = "12345678-1234-5678-1234-56789abcdefa",
+        write,
+        read,
+        value = 0.0
+    )]
+    pub min_buzz_value: f32,
+    #[characteristic(
+        uuid = "12345678-1234-5678-1234-56789abcdefb",
+        write,
+        read,
+        value = 0.0
+    )]
+    pub max_buzz_value: f32,
 }

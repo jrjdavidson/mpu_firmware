@@ -75,10 +75,10 @@ pub static CONTINUOUS_SAMPLE_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =
 pub static MOTION_READ_DURATION_S: Mutex<CriticalSectionRawMutex, u16> =
     Mutex::new(DEFAULT_MOTION_READ_DURATION_S);
 pub static EPOCH: Mutex<CriticalSectionRawMutex, u32> = Mutex::new(0);
-pub static BUZZ_FREQUENCY: Signal<CriticalSectionRawMutex, u32> = Signal::new();
+pub static BUZZ_FREQUENCY: Signal<CriticalSectionRawMutex, f32> = Signal::new();
 pub static BUZZ_FREQUENCY_MODE: Signal<CriticalSectionRawMutex, BuzzFrequencyMode> = Signal::new();
-pub static MIN_BUZZ_VALUE: Signal<CriticalSectionRawMutex, u32> = Signal::new();
-pub static MAX_BUZZ_VALUE: Signal<CriticalSectionRawMutex, u32> = Signal::new();
+pub static MIN_BUZZ_VALUE: Signal<CriticalSectionRawMutex, f32> = Signal::new();
+pub static MAX_BUZZ_VALUE: Signal<CriticalSectionRawMutex, f32> = Signal::new();
 pub static PLAY_SOUND: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 pub static ACCEL_SCALE: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 pub static GYRO_SCALE: Signal<CriticalSectionRawMutex, u8> = Signal::new();

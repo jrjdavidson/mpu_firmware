@@ -12,8 +12,8 @@ pub struct SensorConfig {
     pub accel_scale: u8,
     pub gyro_scale: u8,
     pub buzz_frequency_mode: BuzzFrequencyMode,
-    pub min_buzz_value: u32,
-    pub max_buzz_value: u32,
+    pub min_buzz_value: f32,
+    pub max_buzz_value: f32,
 }
 impl SensorConfig {
     pub fn apply_buzz_frequency_mode(&mut self, mode_source: &mut Option<BuzzFrequencyMode>) {
@@ -43,12 +43,12 @@ impl SensorConfig {
             self.gyro_scale = new_gyro;
         }
     }
-    pub fn apply_max_buzz_value(&mut self, max_source: &mut Option<u32>) {
+    pub fn apply_max_buzz_value(&mut self, max_source: &mut Option<f32>) {
         if let Some(new_max) = max_source.take() {
             self.max_buzz_value = new_max;
         }
     }
-    pub fn apply_min_buzz_value(&mut self, min_source: &mut Option<u32>) {
+    pub fn apply_min_buzz_value(&mut self, min_source: &mut Option<f32>) {
         if let Some(new_min) = min_source.take() {
             self.min_buzz_value = new_min;
         }
@@ -139,25 +139,30 @@ impl From<BuzzFrequencyMode> for u8 {
         }
     }
 }
-pub fn compute_buzz_frequency(accel: &Accel, gyro: &Gyro, mode: u8) -> u32 {
-    match mode.into() {
-        BuzzFrequencyMode::AccelX => accel.x().unsigned_abs() as u32,
-        BuzzFrequencyMode::AccelY => accel.y().unsigned_abs() as u32,
-        BuzzFrequencyMode::AccelZ => accel.z().unsigned_abs() as u32,
-        BuzzFrequencyMode::GyroX => gyro.x().unsigned_abs() as u32,
-        BuzzFrequencyMode::GyroY => gyro.y().unsigned_abs() as u32,
-        BuzzFrequencyMode::GyroZ => gyro.z().unsigned_abs() as u32,
+pub fn compute_buzz_frequency(accel: &Accel, gyro: &Gyro, sensor_config: &SensorConfig) -> f32 {
+    let mode = sensor_config.buzz_frequency_mode;
+    let accel_scale = AccelFullScale::from_u8(sensor_config.accel_scale).unwrap();
+    let gyro_scale = GyroFullScale::from_u8(sensor_config.gyro_scale).unwrap();
+    match mode {
+        BuzzFrequencyMode::AccelX => accel.scaled(accel_scale).x(),
+        BuzzFrequencyMode::AccelY => accel.scaled(accel_scale).y(),
+        BuzzFrequencyMode::AccelZ => accel.scaled(accel_scale).z(),
+        BuzzFrequencyMode::GyroX => gyro.scaled(gyro_scale).x(),
+        BuzzFrequencyMode::GyroY => gyro.scaled(gyro_scale).y(),
+        BuzzFrequencyMode::GyroZ => gyro.scaled(gyro_scale).z(),
         BuzzFrequencyMode::AccelMagnitude => {
-            let x = accel.x() as i64;
-            let y = accel.y() as i64;
-            let z = accel.z() as i64;
-            ((x * x + y * y + z * z) as f32).sqrt() as u32
+            let accel = accel.scaled(accel_scale);
+            let x = accel.x();
+            let y = accel.y();
+            let z = accel.z();
+            (x * x + y * y + z * z).sqrt()
         }
         BuzzFrequencyMode::GyroMagnitude => {
-            let x = gyro.x() as i64;
-            let y = gyro.y() as i64;
-            let z = gyro.z() as i64;
-            ((x * x + y * y + z * z) as f32).sqrt() as u32
+            let gyro = gyro.scaled(gyro_scale);
+            let x = gyro.x();
+            let y = gyro.y();
+            let z = gyro.z();
+            (x * x + y * y + z * z).sqrt()
         }
     }
 }

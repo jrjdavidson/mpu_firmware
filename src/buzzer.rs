@@ -3,6 +3,7 @@ use defmt::{error, info};
 use esp_hal::gpio::AnyPin;
 use esp_hal::ledc::{channel, timer, LSGlobalClkSource, Ledc};
 use esp_hal_buzzer::Buzzer;
+use micromath::F32Ext;
 
 #[embassy_executor::task]
 pub async fn buzzer_task(mut ledc: Ledc<'static>, gpio: AnyPin<'static>) {
@@ -53,12 +54,11 @@ pub async fn buzzer_task(mut ledc: Ledc<'static>, gpio: AnyPin<'static>) {
         }
     }
 }
-fn map_to_frequency(value: u32, min_value: u32, max_value: u32) -> u32 {
-    let min_frequency = 100;
-    let max_frequency = 2000;
-    let range = max_value.saturating_sub(min_value).max(1); // avoid div by zero
-    let value = value.clamp(min_value, max_value);
-    let freq = (value - min_value) as u64 * (max_frequency - min_frequency) as u64 / range as u64
-        + min_frequency as u64;
-    freq as u32
+fn map_to_frequency(value: f32, min_value: f32, max_value: f32) -> u32 {
+    let min_frequency = 100.0; // frequency range where sound is ok.
+    let max_frequency = 2000.0;
+    let range = (max_value - min_value).max(1.0); // avoid div by zero
+    let clamped = value.clamp(min_value, max_value);
+    let freq = ((clamped - min_value) * (max_frequency - min_frequency) / range) + min_frequency;
+    freq.round() as u32
 }

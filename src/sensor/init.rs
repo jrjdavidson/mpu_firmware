@@ -46,14 +46,14 @@ pub async fn configure_sensor<'a>(
     delay: &mut Delay,
 ) -> Result<SensorConfig, SensorInitError<'a>> {
     // sensor.initialize_dmp(delay).await?;
-    let accel_scale = AccelFullScale::G2;
-    ACCEL_SCALE.signal(accel_scale as u8);
-    let gyro_scale = GyroFullScale::Deg2000;
-    GYRO_SCALE.signal(gyro_scale as u8);
+    let default_accel_scale = AccelFullScale::G2; //TODO: persist after restart?
+    ACCEL_SCALE.signal(default_accel_scale as u8);
+    let default_gyro_scale = GyroFullScale::Deg2000; //TODO: persist after restart?
+    GYRO_SCALE.signal(default_gyro_scale as u8);
     // Configure calibration parameters
     let calibration_params = CalibrationParameters::new(
-        accel_scale,
-        gyro_scale,
+        default_accel_scale,
+        default_gyro_scale,
         mpu6050_dmp::calibration::ReferenceGravity::Zero,
     );
 
@@ -61,25 +61,28 @@ pub async fn configure_sensor<'a>(
     sensor.calibrate(delay, &calibration_params).await?;
 
     info!("Sensor Calibrated");
-
+    let motion_detection_enabled = false;
+    if !motion_detection_enabled {
+        let motion_config = MotionConfig {
+            threshold: 2,
+            duration: 10,
+        };
+        sensor.configure_motion_detection(&motion_config).await?;
+        sensor.enable_motion_interrupt().await?;
+    }
     // Configure motion detection with maximum sensitivity
-    let motion_config = MotionConfig {
-        threshold: 2, // 0=2mg threshold (minimum possible)
-        duration: 10, // 1=1ms at 1kHz sample rate (fastest response)
-    };
-    sensor.configure_motion_detection(&motion_config).await?;
-    sensor.enable_motion_interrupt().await?;
-    BUZZ_FREQUENCY_MODE.signal(BuzzFrequencyMode::AccelX);
-    let min_buzz_value = 10;
-    MIN_BUZZ_VALUE.signal(min_buzz_value);
-    let max_buzz_value = 1000;
-    MAX_BUZZ_VALUE.signal(max_buzz_value);
+    let default_buzz_frequency_mode = BuzzFrequencyMode::AccelX;
+    BUZZ_FREQUENCY_MODE.signal(default_buzz_frequency_mode); //TODO: persist after restart?
+    let default_min_buzz_value = 0.5; //TODO: persist after restart?
+    MIN_BUZZ_VALUE.signal(default_min_buzz_value);
+    let default_max_buzz_value = 2.0; //TODO: persist after restart?
+    MAX_BUZZ_VALUE.signal(default_max_buzz_value);
     let sensor_config = SensorConfig {
         accel_scale: ACCEL_SCALE.wait().await,
         gyro_scale: GYRO_SCALE.wait().await,
         buzz_frequency_mode: BUZZ_FREQUENCY_MODE.wait().await,
-        min_buzz_value: min_buzz_value, // is "waited" in the buzzer thread
-        max_buzz_value: max_buzz_value, // is "waited" in the buzzer thread
+        min_buzz_value: default_min_buzz_value, // is "waited" in the buzzer thread
+        max_buzz_value: default_max_buzz_value, // is "waited" in the buzzer thread
     };
     Ok(sensor_config)
 }

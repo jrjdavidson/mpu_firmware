@@ -63,7 +63,7 @@ impl ToBytes for SensorData {
     }
 }
 pub const DEFAULT_MOTION_SAMPLE_INTERVAL_MS: u64 = 10;
-pub const DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS: u64 = 60000;
+pub const DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS: u64 = 0; // 0 means off.
 pub const DEFAULT_MOTION_READ_DURATION_S: u16 = 5;
 
 pub static SENSOR_CHANNEL: Channel<CriticalSectionRawMutex, SensorData, 100> = Channel::new();
@@ -83,4 +83,6 @@ pub static PLAY_SOUND: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 pub static ACCEL_SCALE: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 pub static GYRO_SCALE: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 pub static READ: Signal<CriticalSectionRawMutex, bool> = Signal::new();
+pub static MOTION_DETECTION: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 pub static MARK_EPOCH: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+pub static FILTER: Signal<CriticalSectionRawMutex, u8> = Signal::new();

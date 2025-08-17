@@ -4,7 +4,10 @@ use crate::{
         error::SensorInitError,
         Sensor,
     },
-    shared::{ACCEL_SCALE, BUZZ_FREQUENCY_MODE, GYRO_SCALE, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE},
+    shared::{
+        ACCEL_SCALE, BUZZ_FREQUENCY_MODE, FILTER, GYRO_SCALE, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE,
+        MOTION_DETECTION,
+    },
 };
 use defmt::info;
 use embassy_time::Delay;
@@ -23,16 +26,6 @@ pub async fn initialize_sensor<'a>(i2c: I2c<'a, Async>) -> Result<Sensor<'a>, Se
     //     .set_clock_source(mpu6050_dmp::clock_source::ClockSource::Xgyro)
     //     .await?;
 
-    // // Set accelerometer full scale to most sensitive range
-    sensor
-        .set_accel_full_scale(mpu6050_dmp::accel::AccelFullScale::G2)
-        .await?;
-
-    // Configure DLPF for maximum sensitivity
-    sensor
-        .set_digital_lowpass_filter(mpu6050_dmp::config::DigitalLowPassFilter::Filter1)
-        .await?;
-
     // Set sample rate to 1kHz (1ms period)
     sensor
         .set_sample_rate_divider(0)
@@ -45,6 +38,10 @@ pub async fn configure_sensor<'a>(
     sensor: &mut Mpu6050<I2c<'a, Async>>,
     delay: &mut Delay,
 ) -> Result<SensorConfig, SensorInitError<'a>> {
+    let default_filter = mpu6050_dmp::config::DigitalLowPassFilter::Filter1;
+    FILTER.signal(default_filter as u8);
+    // Configure DLPF for maximum sensitivity
+    sensor.set_digital_lowpass_filter(default_filter).await?;
     // sensor.initialize_dmp(delay).await?;
     let default_accel_scale = AccelFullScale::G2; //TODO: persist after restart?
     ACCEL_SCALE.signal(default_accel_scale as u8);
@@ -62,7 +59,8 @@ pub async fn configure_sensor<'a>(
 
     info!("Sensor Calibrated");
     let motion_detection_enabled = true;
-    if !motion_detection_enabled {
+    MOTION_DETECTION.signal(motion_detection_enabled);
+    if motion_detection_enabled {
         let motion_config = MotionConfig {
             threshold: 2,
             duration: 10,
@@ -83,6 +81,8 @@ pub async fn configure_sensor<'a>(
         buzz_frequency_mode: BUZZ_FREQUENCY_MODE.wait().await,
         min_buzz_value: default_min_buzz_value, // is "waited" in the buzzer thread
         max_buzz_value: default_max_buzz_value, // is "waited" in the buzzer thread
+        filter: FILTER.wait().await,
+        motion_detection: MOTION_DETECTION.wait().await,
     };
     Ok(sensor_config)
 }

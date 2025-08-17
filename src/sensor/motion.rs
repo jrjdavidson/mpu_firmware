@@ -1,6 +1,6 @@
 use defmt::{debug, error, info, warn, Debug2Format};
 use embassy_futures::select::{select, select3, Either, Either3};
-use embassy_time::{Duration, Instant, Timer};
+use embassy_time::{Duration, Instant, Timer, WithTimeout};
 use esp_hal::gpio::Input;
 
 use crate::{
@@ -10,7 +10,8 @@ use crate::{
     },
     shared::{
         SensorData, BLINK_INTERVAL_MS, BUZZ_FREQUENCY, CONTINUOUS_SAMPLE_INTERVAL_MS, EPOCH,
-        MARK_EPOCH, MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, READ, SENSOR_CHANNEL,
+        MARK_EPOCH, MOTION_DETECTION, MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, READ,
+        SENSOR_CHANNEL,
     },
 };
 
@@ -25,6 +26,7 @@ pub async fn motion_detection(
 
     loop {
         let min_interval = *CONTINUOUS_SAMPLE_INTERVAL_MS.lock().await as u64;
+        update_sensor_settings(&mut sensor, &mut sensor_config).await;
 
         info!(
             "Waiting: INT (high->low), READ==true, or {}ms timeout",
@@ -32,12 +34,24 @@ pub async fn motion_detection(
         );
 
         // Build the three competing futures:
-        let timer_fut = Timer::after(Duration::from_millis(min_interval));
+        let timer_fut = match min_interval {
+            0 => {
+                Timer::after(Duration::from_secs(60)) // check settings after 1 sec
+            }
+            _ => Timer::after(Duration::from_millis(min_interval)),
+        };
 
         // Motion INT: wait for high, then low (edge cycle)
         let motion_fut = async {
-            motion_int.wait_for_high().await;
-            motion_int.wait_for_low().await;
+            if sensor_config.motion_detection {
+                motion_int.wait_for_high().await;
+                motion_int.wait_for_low().await;
+            } else {
+                // see if motion detection signal get updated.
+                let motion = MOTION_DETECTION.wait().await;
+                // re-signal for sensor_config, so it will get updated on the next loop
+                MOTION_DETECTION.signal(motion);
+            }
         };
 
         // READ==true: keep ignoring false signals until we see a true
@@ -54,8 +68,9 @@ pub async fn motion_detection(
         match select3(timer_fut, motion_fut, read_true_fut).await {
             // 1) Periodic timeout: take one sample and loop
             Either3::First(_) => {
-                update_sensor_settings(&mut sensor, &mut sensor_config).await;
-                report_motion(&mut sensor, &sensor_config).await;
+                if min_interval != 0 {
+                    report_motion(&mut sensor, &sensor_config).await;
+                }
                 continue;
             }
 
@@ -87,29 +102,32 @@ async fn run_read_window(sensor: &mut Sensor<'_>, sensor_config: &mut SensorConf
     );
     BLINK_INTERVAL_MS.signal(10);
 
-    update_sensor_settings(sensor, sensor_config).await;
-
     let mut start = Instant::now();
     while Instant::now() - start < Duration::from_secs(duration_s) {
         let loop_start = Instant::now();
+        update_sensor_settings(sensor, sensor_config).await; // could settings change wait for next read window?
 
         // One sample
         report_motion(sensor, &*sensor_config).await;
+        let interval = Duration::from_millis(*MOTION_SAMPLE_INTERVAL_MS.lock().await as u64);
 
         // Extend window if motion continues
-        match sensor.check_motion().await {
-            Ok(result) => {
-                if result.0 {
-                    start = Instant::now();
-                    info!("Motion detected, resetting start time");
+        match sensor.check_motion().with_timeout(interval).await {
+            Ok(timeout_result) => match timeout_result {
+                Ok(check_result) => {
+                    if check_result.0 {
+                        start = Instant::now();
+                        info!("Motion detected, resetting start time");
+                    }
                 }
-            }
-            Err(e) => error!("Error when reading motion_check: {}", e),
+                Err(e) => error!("Error when reading motion_check: {}", e),
+            },
+
+            Err(e) => error!("Timeout when reading motion_check: {}", e),
         }
 
         // Keep sample rate, but allow MARK_EPOCH to interrupt the sleep.
         let elapsed = Instant::now() - loop_start;
-        let interval = Duration::from_millis(*MOTION_SAMPLE_INTERVAL_MS.lock().await as u64);
 
         if elapsed < interval {
             // Sleep for remainder OR react to MARK_EPOCH immediately

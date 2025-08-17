@@ -106,4 +106,27 @@ pub struct MyService {
         value = 0.0
     )]
     pub max_buzz_value: f32,
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefc", write, read, value = 1)]
+    pub digital_low_pass_filter: u8,
+    #[characteristic(
+        uuid = "12345678-1234-5678-1234-56789abcdefd",
+        write,
+        read,
+        value = false
+    )]
+    pub read: bool,
+    #[characteristic(
+        uuid = "12345678-1234-5678-1234-56789abcdefe",
+        write,
+        read,
+        value = false
+    )]
+    pub mark_epoch: bool,
+    #[characteristic(
+        uuid = "12345678-1234-5678-1234-56789abcdff0",
+        write,
+        read,
+        value = false
+    )]
+    pub motion_detection: bool,
 }

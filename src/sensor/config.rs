@@ -1,6 +1,8 @@
+use defmt::{info, Format};
 use micromath::F32Ext;
 use mpu6050_dmp::{
     accel::{Accel, AccelFullScale},
+    config::DigitalLowPassFilter,
     gyro::{Gyro, GyroFullScale},
 };
 
@@ -9,10 +11,11 @@ use crate::{
     shared::{
         ACCEL_SCALE,
         BUZZ_FREQUENCY_MODE,
+        FILTER,
         GYRO_SCALE,
         MAX_BUZZ_VALUE,
         MIN_BUZZ_VALUE,
-        //SENSOR_CHANNEL,
+        MOTION_DETECTION, //SENSOR_CHANNEL,
     },
 };
 pub struct SensorConfig {
@@ -21,45 +24,67 @@ pub struct SensorConfig {
     pub buzz_frequency_mode: BuzzFrequencyMode,
     pub min_buzz_value: f32,
     pub max_buzz_value: f32,
+    pub filter: u8,
+    pub motion_detection: bool,
 }
 impl SensorConfig {
-    pub fn apply_buzz_frequency_mode(&mut self, mode_source: &mut Option<BuzzFrequencyMode>) {
-        if let Some(new_mode) = mode_source.take() {
+    pub fn apply_buzz_frequency_mode(&mut self, mode_source: Option<BuzzFrequencyMode>) {
+        if let Some(new_mode) = mode_source {
+            info!("Buzz Frequency mode updated: {}", new_mode);
             self.buzz_frequency_mode = new_mode;
         }
     }
     pub async fn apply_accel_scale<'a>(
         &mut self,
         sensor: &mut Sensor<'a>,
-        accel_source: &mut Option<u8>,
+        accel_source: Option<u8>,
     ) {
-        if let Some(new_accel) = accel_source.take() {
+        if let Some(new_accel) = accel_source {
             let afs = AccelFullScale::from_u8(new_accel).unwrap_or(AccelFullScale::G2);
+            info!("Accel scale updated: {}", afs);
+
             sensor.set_accel_full_scale(afs).await.unwrap();
             self.accel_scale = new_accel;
             //SENSOR_CHANNEL.clear();//not sure if needed?
         }
     }
-    pub async fn apply_gyro_scale<'a>(
-        &mut self,
-        sensor: &mut Sensor<'a>,
-        gyro_source: &mut Option<u8>,
-    ) {
-        if let Some(new_gyro) = gyro_source.take() {
+    pub async fn apply_gyro_scale<'a>(&mut self, sensor: &mut Sensor<'a>, gyro_source: Option<u8>) {
+        if let Some(new_gyro) = gyro_source {
             let gfs = GyroFullScale::from_u8(new_gyro).unwrap_or(GyroFullScale::Deg2000);
+            info!("Gyro scale updated: {}", gfs);
             sensor.set_gyro_full_scale(gfs).await.unwrap();
             self.gyro_scale = new_gyro;
             //SENSOR_CHANNEL.clear();//not sure if needed?
         }
     }
-    pub fn apply_max_buzz_value(&mut self, max_source: &mut Option<f32>) {
-        if let Some(new_max) = max_source.take() {
+    pub async fn apply_filter<'a>(&mut self, sensor: &mut Sensor<'a>, filter_source: Option<u8>) {
+        if let Some(new_filter) = filter_source {
+            let dlpf =
+                DigitalLowPassFilter::from_u8(new_filter).unwrap_or(DigitalLowPassFilter::Filter1);
+            info!("Digital Low Pass Filter updated: {}", dlpf);
+            sensor.set_digital_lowpass_filter(dlpf).await.unwrap();
+            self.gyro_scale = new_filter;
+            //SENSOR_CHANNEL.clear();//not sure if needed?
+        }
+    }
+    pub fn apply_max_buzz_value(&mut self, max_source: Option<f32>) {
+        if let Some(new_max) = max_source {
+            info!("Max Buzz updated: {}", new_max);
+
             self.max_buzz_value = new_max;
         }
     }
-    pub fn apply_min_buzz_value(&mut self, min_source: &mut Option<f32>) {
-        if let Some(new_min) = min_source.take() {
+    pub fn apply_min_buzz_value(&mut self, min_source: Option<f32>) {
+        if let Some(new_min) = min_source {
+            info!("Min Buzz updated: {}", new_min);
             self.min_buzz_value = new_min;
+        }
+    }
+    pub fn apply_motion_detection(&mut self, motion_detection: Option<bool>) {
+        if let Some(new_detection) = motion_detection {
+            info!("Motion Detection enabled updated: {}", new_detection);
+
+            self.motion_detection = new_detection;
         }
     }
 }
@@ -95,20 +120,42 @@ impl GyroFullScaleFromU8 for GyroFullScale {
         }
     }
 }
-pub async fn update_sensor_settings<'a>(sensor: &mut Sensor<'a>, sensor_config: &mut SensorConfig) {
-    sensor_config.apply_buzz_frequency_mode(&mut BUZZ_FREQUENCY_MODE.try_take());
-    sensor_config
-        .apply_accel_scale(sensor, &mut ACCEL_SCALE.try_take())
-        .await;
 
-    sensor_config
-        .apply_gyro_scale(sensor, &mut GYRO_SCALE.try_take())
-        .await;
-    sensor_config.apply_max_buzz_value(&mut MAX_BUZZ_VALUE.try_take());
-    sensor_config.apply_min_buzz_value(&mut MIN_BUZZ_VALUE.try_take());
+pub trait DigitalLowPassFilterFromU8 {
+    fn from_u8(value: u8) -> Option<DigitalLowPassFilter>;
 }
 
-#[derive(Clone, Copy, Debug)]
+impl DigitalLowPassFilterFromU8 for DigitalLowPassFilter {
+    fn from_u8(value: u8) -> Option<DigitalLowPassFilter> {
+        match value {
+            0 => Some(DigitalLowPassFilter::Filter0),
+            1 => Some(DigitalLowPassFilter::Filter1),
+            2 => Some(DigitalLowPassFilter::Filter2),
+            3 => Some(DigitalLowPassFilter::Filter3),
+            4 => Some(DigitalLowPassFilter::Filter4),
+            5 => Some(DigitalLowPassFilter::Filter5),
+            6 => Some(DigitalLowPassFilter::Filter6),
+            _ => None,
+        }
+    }
+}
+pub async fn update_sensor_settings<'a>(sensor: &mut Sensor<'a>, sensor_config: &mut SensorConfig) {
+    sensor_config.apply_buzz_frequency_mode(BUZZ_FREQUENCY_MODE.try_take());
+    sensor_config
+        .apply_accel_scale(sensor, ACCEL_SCALE.try_take())
+        .await;
+
+    sensor_config
+        .apply_gyro_scale(sensor, GYRO_SCALE.try_take())
+        .await;
+    sensor_config.apply_filter(sensor, FILTER.try_take()).await;
+
+    sensor_config.apply_max_buzz_value(MAX_BUZZ_VALUE.try_take());
+    sensor_config.apply_min_buzz_value(MIN_BUZZ_VALUE.try_take());
+    sensor_config.apply_motion_detection(MOTION_DETECTION.try_take());
+}
+
+#[derive(Clone, Copy, Debug, Format)]
 pub enum BuzzFrequencyMode {
     AccelX,
     AccelY,

@@ -1,20 +1,18 @@
 use crate::{
-    sensor::{
-        config::{BuzzFrequencyMode, SensorConfig},
-        error::SensorInitError,
-        Sensor,
-    },
+    sensor::{config::SensorConfig, error::SensorInitError, Sensor},
     shared::{
-        ACCEL_SCALE, BUZZ_FREQUENCY_MODE, FILTER, GYRO_SCALE, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE,
-        MOTION_DETECTION,
+        ACCEL_SCALE, BUZZ_FREQUENCY_MODE, DEFAULT_ACCEL_SCALE, DEFAULT_BUZZ_FREQUENCY_MODE,
+        DEFAULT_FILTER, DEFAULT_GYRO_SCALE, DEFAULT_MAX_BUZZ_VALUE, DEFAULT_MIN_BUZZ_VALUE,
+        DEFAULT_MOTION_DETECTION, DEFAULT_PLAY_SOUND, FILTER, GYRO_SCALE, MAX_BUZZ_VALUE,
+        MIN_BUZZ_VALUE, MOTION_DETECTION, PLAY_SOUND,
     },
 };
 use defmt::info;
 use embassy_time::Delay;
 use esp_hal::{i2c::master::I2c, Async};
 use mpu6050_dmp::{
-    accel::AccelFullScale, address::Address, calibration::CalibrationParameters,
-    gyro::GyroFullScale, motion::MotionConfig, sensor_async::Mpu6050,
+    address::Address, calibration::CalibrationParameters, motion::MotionConfig,
+    sensor_async::Mpu6050,
 };
 
 pub async fn initialize_sensor<'a>(i2c: I2c<'a, Async>) -> Result<Sensor<'a>, SensorInitError<'a>> {
@@ -38,19 +36,16 @@ pub async fn configure_sensor<'a>(
     sensor: &mut Mpu6050<I2c<'a, Async>>,
     delay: &mut Delay,
 ) -> Result<SensorConfig, SensorInitError<'a>> {
-    let default_filter = mpu6050_dmp::config::DigitalLowPassFilter::Filter1;
-    FILTER.signal(default_filter as u8);
+    FILTER.signal(DEFAULT_FILTER as u8);
     // Configure DLPF for maximum sensitivity
-    sensor.set_digital_lowpass_filter(default_filter).await?;
+    sensor.set_digital_lowpass_filter(DEFAULT_FILTER).await?;
     // sensor.initialize_dmp(delay).await?;
-    let default_accel_scale = AccelFullScale::G2; //TODO: persist after restart?
-    ACCEL_SCALE.signal(default_accel_scale as u8);
-    let default_gyro_scale = GyroFullScale::Deg2000; //TODO: persist after restart?
-    GYRO_SCALE.signal(default_gyro_scale as u8);
+    ACCEL_SCALE.signal(DEFAULT_ACCEL_SCALE as u8);
+    GYRO_SCALE.signal(DEFAULT_GYRO_SCALE as u8);
     // Configure calibration parameters
     let calibration_params = CalibrationParameters::new(
-        default_accel_scale,
-        default_gyro_scale,
+        DEFAULT_ACCEL_SCALE,
+        DEFAULT_GYRO_SCALE,
         mpu6050_dmp::calibration::ReferenceGravity::Zero,
     );
 
@@ -58,29 +53,25 @@ pub async fn configure_sensor<'a>(
     sensor.calibrate(delay, &calibration_params).await?;
 
     info!("Sensor Calibrated");
-    let motion_detection_enabled = true;
-    MOTION_DETECTION.signal(motion_detection_enabled);
-    if motion_detection_enabled {
-        let motion_config = MotionConfig {
-            threshold: 2,
-            duration: 10,
-        };
-        sensor.configure_motion_detection(&motion_config).await?;
-        sensor.enable_motion_interrupt().await?;
-    }
+    MOTION_DETECTION.signal(DEFAULT_MOTION_DETECTION);
+    let motion_config = MotionConfig {
+        threshold: 2,
+        duration: 10,
+    };
+    sensor.configure_motion_detection(&motion_config).await?;
+    sensor.enable_motion_interrupt().await?;
     // Configure motion detection with maximum sensitivity
-    let default_buzz_frequency_mode = BuzzFrequencyMode::AccelX;
-    BUZZ_FREQUENCY_MODE.signal(default_buzz_frequency_mode); //TODO: persist after restart?
-    let default_min_buzz_value = 0.5; //TODO: persist after restart?
-    MIN_BUZZ_VALUE.signal(default_min_buzz_value);
-    let default_max_buzz_value = 2.0; //TODO: persist after restart?
-    MAX_BUZZ_VALUE.signal(default_max_buzz_value);
+    BUZZ_FREQUENCY_MODE.signal(DEFAULT_BUZZ_FREQUENCY_MODE); //TODO: persist after restart?
+
+    // Set default min/max buzz values
+    // These values will be read in the buzzer module, but are initialized here for conistency.
+    MIN_BUZZ_VALUE.signal(DEFAULT_MIN_BUZZ_VALUE);
+    MAX_BUZZ_VALUE.signal(DEFAULT_MAX_BUZZ_VALUE);
+    PLAY_SOUND.signal(DEFAULT_PLAY_SOUND);
     let sensor_config = SensorConfig {
         accel_scale: ACCEL_SCALE.wait().await,
         gyro_scale: GYRO_SCALE.wait().await,
         buzz_frequency_mode: BUZZ_FREQUENCY_MODE.wait().await,
-        min_buzz_value: default_min_buzz_value, // is "waited" in the buzzer thread
-        max_buzz_value: default_max_buzz_value, // is "waited" in the buzzer thread
         filter: FILTER.wait().await,
         motion_detection: MOTION_DETECTION.wait().await,
     };

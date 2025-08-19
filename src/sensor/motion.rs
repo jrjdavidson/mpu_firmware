@@ -112,18 +112,20 @@ async fn run_read_window(sensor: &mut Sensor<'_>, sensor_config: &mut SensorConf
         let interval = Duration::from_millis(*MOTION_SAMPLE_INTERVAL_MS.lock().await as u64);
 
         // Extend window if motion continues
-        match sensor.check_motion().with_timeout(interval).await {
-            Ok(timeout_result) => match timeout_result {
-                Ok(check_result) => {
-                    if check_result.0 {
-                        start = Instant::now();
-                        info!("Motion detected, resetting start time");
+        if sensor_config.motion_detection {
+            match sensor.check_motion().with_timeout(interval).await {
+                Ok(timeout_result) => match timeout_result {
+                    Ok(check_result) => {
+                        if check_result.0 {
+                            start = Instant::now();
+                            info!("Motion detected, resetting start time");
+                        }
                     }
-                }
-                Err(e) => error!("Error when reading motion_check: {}", e),
-            },
+                    Err(e) => error!("Error when reading motion_check: {}", e),
+                },
 
-            Err(e) => error!("Timeout when reading motion_check: {}", e),
+                Err(e) => error!("Timeout when reading motion_check: {}", e),
+            }
         }
 
         // Keep sample rate, but allow MARK_EPOCH to interrupt the sleep.

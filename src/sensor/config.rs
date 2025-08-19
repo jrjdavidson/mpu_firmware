@@ -13,8 +13,6 @@ use crate::{
         BUZZ_FREQUENCY_MODE,
         FILTER,
         GYRO_SCALE,
-        MAX_BUZZ_VALUE,
-        MIN_BUZZ_VALUE,
         MOTION_DETECTION, //SENSOR_CHANNEL,
     },
 };
@@ -22,8 +20,6 @@ pub struct SensorConfig {
     pub accel_scale: u8,
     pub gyro_scale: u8,
     pub buzz_frequency_mode: BuzzFrequencyMode,
-    pub min_buzz_value: f32,
-    pub max_buzz_value: f32,
     pub filter: u8,
     pub motion_detection: bool,
 }
@@ -65,19 +61,6 @@ impl SensorConfig {
             sensor.set_digital_lowpass_filter(dlpf).await.unwrap();
             self.gyro_scale = new_filter;
             //SENSOR_CHANNEL.clear();//not sure if needed?
-        }
-    }
-    pub fn apply_max_buzz_value(&mut self, max_source: Option<f32>) {
-        if let Some(new_max) = max_source {
-            info!("Max Buzz updated: {}", new_max);
-
-            self.max_buzz_value = new_max;
-        }
-    }
-    pub fn apply_min_buzz_value(&mut self, min_source: Option<f32>) {
-        if let Some(new_min) = min_source {
-            info!("Min Buzz updated: {}", new_min);
-            self.min_buzz_value = new_min;
         }
     }
     pub fn apply_motion_detection(&mut self, motion_detection: Option<bool>) {
@@ -150,8 +133,6 @@ pub async fn update_sensor_settings<'a>(sensor: &mut Sensor<'a>, sensor_config: 
         .await;
     sensor_config.apply_filter(sensor, FILTER.try_take()).await;
 
-    sensor_config.apply_max_buzz_value(MAX_BUZZ_VALUE.try_take());
-    sensor_config.apply_min_buzz_value(MIN_BUZZ_VALUE.try_take());
     sensor_config.apply_motion_detection(MOTION_DETECTION.try_take());
 }
 

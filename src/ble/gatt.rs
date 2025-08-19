@@ -1,11 +1,11 @@
 use heapless::Vec;
-use mpu6050_dmp::{accel::AccelFullScale, gyro::GyroFullScale};
 use trouble_host::prelude::*;
 
 use crate::sensor::config::BuzzFrequencyMode;
 use crate::shared::{
-    DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS, DEFAULT_MOTION_READ_DURATION_S,
-    DEFAULT_MOTION_SAMPLE_INTERVAL_MS,
+    DEFAULT_ACCEL_SCALE, DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS, DEFAULT_FILTER, DEFAULT_GYRO_SCALE,
+    DEFAULT_MAX_BUZZ_VALUE, DEFAULT_MIN_BUZZ_VALUE, DEFAULT_MOTION_DETECTION,
+    DEFAULT_MOTION_READ_DURATION_S, DEFAULT_MOTION_SAMPLE_INTERVAL_MS, DEFAULT_PLAY_SOUND,
 };
 
 /// GATT Server definition
@@ -58,7 +58,7 @@ pub struct MyService {
         uuid = "12345678-1234-5678-1234-56789abcdef5",
         write,
         read,
-        value = false
+        value = DEFAULT_PLAY_SOUND
     )]
     pub play_sound: bool,
     #[characteristic(
@@ -73,7 +73,7 @@ pub struct MyService {
         uuid = "12345678-1234-5678-1234-56789abcdef7",
         write,
         read,
-        value = AccelFullScale::G2 as u8
+        value = DEFAULT_ACCEL_SCALE as u8
     )]
     pub accel_scale: u8,
 
@@ -81,7 +81,7 @@ pub struct MyService {
         uuid = "12345678-1234-5678-1234-56789abcdef8",
         write,
         read,
-        value = GyroFullScale::Deg2000 as u8
+        value = DEFAULT_GYRO_SCALE as u8
     )]
     pub gyro_scale: u8,
 
@@ -92,21 +92,11 @@ pub struct MyService {
         value = BuzzFrequencyMode::AccelX as u8
     )]
     pub buzz_frequency_mode: u8,
-    #[characteristic(
-        uuid = "12345678-1234-5678-1234-56789abcdefa",
-        write,
-        read,
-        value = 0.0
-    )]
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefa", write, read, value = DEFAULT_MIN_BUZZ_VALUE)]
     pub min_buzz_value: f32,
-    #[characteristic(
-        uuid = "12345678-1234-5678-1234-56789abcdefb",
-        write,
-        read,
-        value = 0.0
-    )]
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefb", write, read, value = DEFAULT_MAX_BUZZ_VALUE)]
     pub max_buzz_value: f32,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefc", write, read, value = 1)]
+    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefc", write, read, value = DEFAULT_FILTER as u8)]
     pub digital_low_pass_filter: u8,
     #[characteristic(
         uuid = "12345678-1234-5678-1234-56789abcdefd",
@@ -126,7 +116,7 @@ pub struct MyService {
         uuid = "12345678-1234-5678-1234-56789abcdff0",
         write,
         read,
-        value = false
+        value = DEFAULT_MOTION_DETECTION
     )]
     pub motion_detection: bool,
 }

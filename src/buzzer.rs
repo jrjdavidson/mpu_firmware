@@ -25,7 +25,7 @@ pub async fn buzzer_task(mut ledc: Ledc<'static>, gpio: AnyPin<'static>) {
 
     let mut min_value = MIN_BUZZ_VALUE.wait().await;
     let mut max_value = MAX_BUZZ_VALUE.wait().await;
-    let mut play_sound = false;
+    let mut play_sound = PLAY_SOUND.wait().await;
     loop {
         if !play_sound {
             info!("waiting for Sound playback enabled");
@@ -57,6 +57,11 @@ pub async fn buzzer_task(mut ledc: Ledc<'static>, gpio: AnyPin<'static>) {
 fn map_to_frequency(value: f32, min_value: f32, max_value: f32) -> u32 {
     let min_frequency = 100.0; // frequency range where sound is ok.
     let max_frequency = 2000.0;
+    info!(
+        "Mapping value {} to frequency range [{}, {}], with min/max values: {}, {}",
+        value, min_frequency, max_frequency, min_value, max_value
+    );
+
     let range = (max_value - min_value).max(1.0); // avoid div by zero
     let clamped = value.clamp(min_value, max_value);
     let freq = ((clamped - min_value) * (max_frequency - min_frequency) / range) + min_frequency;

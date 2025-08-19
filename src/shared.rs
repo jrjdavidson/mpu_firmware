@@ -4,6 +4,9 @@ use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use heapless::Vec;
+use mpu6050_dmp::accel::AccelFullScale;
+use mpu6050_dmp::config::DigitalLowPassFilter;
+use mpu6050_dmp::gyro::GyroFullScale;
 
 use crate::sensor::config::BuzzFrequencyMode;
 
@@ -17,7 +20,7 @@ pub struct SensorData {
     pub gyro_y: i16,
     pub gyro_z: i16,
     pub gyro_scale: u8,
-    pub timestamp_ms: u32, // Milliseconds since boot - will overflow after ~49 days
+    pub timestamp_ms: u32, // Milliseconds since read start - will overflow after ~49 days
 }
 impl SensorData {
     pub const fn zero() -> Self {
@@ -62,9 +65,19 @@ impl ToBytes for SensorData {
         vec.extend_from_slice(&self.timestamp_ms.to_le_bytes()).ok();
     }
 }
+
+//TODO: persist values after restart, instead of setting defaults?
 pub const DEFAULT_MOTION_SAMPLE_INTERVAL_MS: u64 = 10;
 pub const DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS: u64 = 0; // 0 means off.
 pub const DEFAULT_MOTION_READ_DURATION_S: u16 = 5;
+pub const DEFAULT_MOTION_DETECTION: bool = false;
+pub const DEFAULT_FILTER: DigitalLowPassFilter = mpu6050_dmp::config::DigitalLowPassFilter::Filter1;
+pub const DEFAULT_ACCEL_SCALE: AccelFullScale = AccelFullScale::G2;
+pub const DEFAULT_GYRO_SCALE: GyroFullScale = GyroFullScale::Deg2000;
+pub const DEFAULT_BUZZ_FREQUENCY_MODE: BuzzFrequencyMode = BuzzFrequencyMode::AccelX;
+pub const DEFAULT_MIN_BUZZ_VALUE: f32 = 0.5;
+pub const DEFAULT_MAX_BUZZ_VALUE: f32 = 2.0;
+pub const DEFAULT_PLAY_SOUND: bool = false;
 
 pub static SENSOR_CHANNEL: Channel<CriticalSectionRawMutex, SensorData, 100> = Channel::new();
 pub static BLINK_INTERVAL_MS: Signal<CriticalSectionRawMutex, u64> = Signal::new();

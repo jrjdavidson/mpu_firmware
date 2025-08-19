@@ -21,7 +21,6 @@ pub async fn buzzer_task(mut ledc: Ledc<'static>, gpio: AnyPin<'static>) {
     buzzer.play(0).unwrap_or_else(|e| {
         error!("Failed to initialize buzzer: {}", e);
     });
-    info!("startng buzzer");
 
     let mut min_value = MIN_BUZZ_VALUE.wait().await;
     let mut max_value = MAX_BUZZ_VALUE.wait().await;
@@ -38,13 +37,11 @@ pub async fn buzzer_task(mut ledc: Ledc<'static>, gpio: AnyPin<'static>) {
             let value = BUZZ_FREQUENCY.wait().await;
             min_value = MIN_BUZZ_VALUE.try_take().unwrap_or(min_value);
             max_value = MAX_BUZZ_VALUE.try_take().unwrap_or(max_value);
-            info!("vALUE : {}", value);
             let freq = if value > min_value {
                 map_to_frequency(value, min_value, max_value)
             } else {
                 0
             };
-            info!("frequency : {}", freq);
 
             // Play a tone based on the frequency
             buzzer.play(freq).unwrap_or_else(|e| {

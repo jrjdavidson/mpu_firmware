@@ -1,7 +1,7 @@
 # MPU-6050 BLE Telemetry Firmware
 
 Firmware in 100 percent Rust (`no_std`) for the ESP32-C6.  
-It samples six-degree-of-freedom motion data from an MPU-6050 over I²C, packetises it, and streams it via Bluetooth Low Energy notifications so a phone or PC can plot live orientation and acceleration.
+It samples six-degree-of-freedom motion data from an MPU-6050 over I²C, packetises it, and streams it via Bluetooth Low Energy notifications so a phone or PC can plot live orientation and acceleration. This firmware is designed to be run with the motion_ble webpage.
 
 Repo: `jrjdavidson/mpu_firmware`
 
@@ -41,7 +41,6 @@ rustup target add riscv32imac-esp-espidf
 # haven't tried this myself ,not sure if it will work
 cargo install espup --locked
 espup install --export-file esp.env
-. .\esp.env          # activate toolchain for current shell
 
 # probe-rs tools for on-chip debugging
 irm https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.ps1 | iex
@@ -52,7 +51,6 @@ irm https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools
 ```powershell
 git clone https://github.com/jrjdavidson/mpu_firmware
 cd mpu_firmware
-cargo build --release
 
 # auto-detects the ESP32-C6
 cargo run -r
@@ -63,38 +61,16 @@ cargo run -r
 
 ## 3. BLE output 
 
-Can be read with the motion reporter website over WebBluetooth
+Can be read with the motion reporter website, which uses WebBluetooth to stream the data to a graph.
 
 
 ---
 
-## 4. Crate layout and key dependencies
-
-layout TBC
-
-| Purpose             | Crate |
-|---------------------|-------|
-| ESP-C6 HAL & BLE    | `esp-hal` |
-| Embedded traits     | `embedded-hal` |
-| Sensor driver       | `mpu6050` |
-| Flashing & debug    | `espflash`, `probe-rs` |
-
----
-
-## 5. VS Code integration (optional)
-
-1. Install extensions  
-   - rust-analyzer  
-   - Espressif IDF (serial monitor)
-   - Debugger for probe-rs
-
----
-
-## 6. Further reading
+## 4. Further recommmended reading
 
 - esp-rs book: <https://esp-rs.github.io/book>  
 - MPU-6050 register map: <https://www.invensense.com/wp-content/uploads/2015/02/MPU-6000-Register-Map1.pdf>  
 - BLE GATT design guide: <https://developer.bluetooth.org/gatt>
+- MPU-6050-dmp repo: <https://github.com/barafael/mpu6050-dmp-rs>
 
 ---
-```

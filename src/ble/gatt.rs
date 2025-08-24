@@ -19,7 +19,7 @@ pub struct MyService {
     #[characteristic(
         uuid = "12345678-1234-5678-1234-56789abcdeff",
         read,
-        value = Vec::from_slice(b"v1.0.0").unwrap()
+        value = Vec::from_slice(b"v1.0.1").unwrap()
     )]
     pub firmware_version: Vec<u8, 16>,
 

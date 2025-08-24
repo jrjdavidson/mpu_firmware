@@ -59,7 +59,7 @@ impl SensorConfig {
                 DigitalLowPassFilter::from_u8(new_filter).unwrap_or(DigitalLowPassFilter::Filter1);
             info!("Digital Low Pass Filter updated: {}", dlpf);
             sensor.set_digital_lowpass_filter(dlpf).await.unwrap();
-            self.gyro_scale = new_filter;
+            self.filter = new_filter;
             //SENSOR_CHANNEL.clear();//not sure if needed?
         }
     }

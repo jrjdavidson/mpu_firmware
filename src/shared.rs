@@ -8,7 +8,7 @@ use mpu6050_dmp::accel::AccelFullScale;
 use mpu6050_dmp::config::DigitalLowPassFilter;
 use mpu6050_dmp::gyro::GyroFullScale;
 
-use crate::sensor::config::BuzzFrequencyMode;
+use crate::sensor::config::buzzer_config::BuzzFrequencyMode;
 
 #[derive(Debug, Format)]
 pub struct SensorData {
@@ -89,7 +89,7 @@ pub static MOTION_READ_DURATION_S: Mutex<CriticalSectionRawMutex, u16> =
     Mutex::new(DEFAULT_MOTION_READ_DURATION_S);
 pub static EPOCH: Mutex<CriticalSectionRawMutex, u32> = Mutex::new(0);
 pub static BUZZ_FREQUENCY: Signal<CriticalSectionRawMutex, f32> = Signal::new();
-pub static BUZZ_FREQUENCY_MODE: Signal<CriticalSectionRawMutex, BuzzFrequencyMode> = Signal::new();
+pub static BUZZ_FREQUENCY_MODE: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 pub static MIN_BUZZ_VALUE: Signal<CriticalSectionRawMutex, f32> = Signal::new();
 pub static MAX_BUZZ_VALUE: Signal<CriticalSectionRawMutex, f32> = Signal::new();
 pub static PLAY_SOUND: Signal<CriticalSectionRawMutex, bool> = Signal::new();

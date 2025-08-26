@@ -61,7 +61,7 @@ pub async fn configure_sensor<'a>(
     sensor.configure_motion_detection(&motion_config).await?;
     sensor.enable_motion_interrupt().await?;
     // Configure motion detection with maximum sensitivity
-    BUZZ_FREQUENCY_MODE.signal(DEFAULT_BUZZ_FREQUENCY_MODE); //TODO: persist after restart?
+    BUZZ_FREQUENCY_MODE.signal(DEFAULT_BUZZ_FREQUENCY_MODE as u8); //TODO: persist after restart?
 
     // Set default min/max buzz values
     // These values will be read in the buzzer module, but are initialized here for conistency.

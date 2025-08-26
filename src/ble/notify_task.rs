@@ -2,7 +2,7 @@ use crate::{
     ble::gatt::Server,
     shared::{ToBytes, SENSOR_CHANNEL},
 };
-use defmt::{error, info};
+use defmt::{debug, error};
 
 use embassy_time::Timer;
 use heapless::Vec;
@@ -21,7 +21,7 @@ pub async fn run_task<P: PacketPool>(server: &Server<'_>, conn: &GattConnection<
         buf.clear();
         let data = SENSOR_CHANNEL.receive().await;
         data.write_to_vec(&mut buf);
-        info!("[custom_task] notifying result");
+        debug!("[custom_task] notifying result");
 
         //timestamp is at 12..16, accel data at 0..7 (including scale bit at 0), gyro data at 7..14( including scale bit at 7)
         accel_batch.extend_from_slice(&buf[14..18]).ok();

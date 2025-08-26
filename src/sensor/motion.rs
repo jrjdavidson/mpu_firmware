@@ -5,7 +5,7 @@ use esp_hal::gpio::Input;
 
 use crate::{
     sensor::{
-        config::{compute_buzz_frequency, update_sensor_settings, SensorConfig},
+        config::{buzzer_config::compute_buzz_frequency, update_sensor_settings, SensorConfig},
         Sensor,
     },
     shared::{

@@ -15,10 +15,10 @@ use esp_hal::ledc::Ledc;
 use esp_hal::timer::systimer::SystemTimer;
 use esp_hal::timer::timg::TimerGroup;
 use esp_wifi::ble::controller::BleConnector;
-use mputest::led::led_blink_task;
+use mputest::led::{led_blink_task, LedState};
 use mputest::sensor::init::{configure_sensor, initialize_sensor};
-use mputest::sensor::motion::motion_detection;
-use mputest::shared::BLINK_INTERVAL_MS;
+use mputest::sensor::motion::motion_reading;
+use mputest::shared::LED_STATE;
 use mputest::{ble, buzzer};
 use panic_rtt_target as _;
 
@@ -78,12 +78,12 @@ async fn main(spawner: Spawner) {
         Ok(sensor) => sensor,
         Err(e) => {
             info!("Failed to initialize sensor: {:?}", e);
-            BLINK_INTERVAL_MS.signal(100);
+            LED_STATE.signal(LedState::Error);
             return;
         }
     };
     let mut delay = Delay;
-    BLINK_INTERVAL_MS.signal(200);
+    LED_STATE.signal(LedState::Calibrating);
     let sensor_config_result = configure_sensor(&mut sensor, &mut delay).await;
     let sensor_config = match sensor_config_result {
         Ok(sensor_config) => {
@@ -92,19 +92,19 @@ async fn main(spawner: Spawner) {
         }
         Err(e) => {
             info!("Failed to configure sensor: {:?}", e);
-            BLINK_INTERVAL_MS.signal(100);
+            LED_STATE.signal(LedState::Error);
 
             return;
         }
     };
-    BLINK_INTERVAL_MS.signal(1000);
+    LED_STATE.signal(LedState::Ready);
 
     spawner
         .spawn(buzzer::buzzer_task(ledc, buzzer_gpio.into()))
         .ok();
 
     spawner
-        .spawn(motion_detection(sensor, sensor_config, motion_int))
+        .spawn(motion_reading(sensor, sensor_config, motion_int))
         .ok();
     ble::run(ble_controller).await;
 }

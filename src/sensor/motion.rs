@@ -4,24 +4,24 @@ use embassy_time::{Duration, Instant, Timer, WithTimeout};
 use esp_hal::gpio::Input;
 
 use crate::{
+    led::LedState,
     sensor::{
         config::{buzzer_config::compute_buzz_frequency, update_sensor_settings, SensorConfig},
         Sensor,
     },
     shared::{
-        SensorData, BLINK_INTERVAL_MS, BUZZ_FREQUENCY, CONTINUOUS_SAMPLE_INTERVAL_MS, EPOCH,
-        MARK_EPOCH, MOTION_DETECTION, MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, READ,
-        SENSOR_CHANNEL,
+        SensorData, BUZZ_FREQUENCY, CONTINUOUS_SAMPLE_INTERVAL_MS, EPOCH, LED_STATE, MARK_EPOCH,
+        MOTION_DETECTION, MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, READ, SENSOR_CHANNEL,
     },
 };
 
 #[embassy_executor::task]
-pub async fn motion_detection(
+pub async fn motion_reading(
     mut sensor: Sensor<'static>,
     mut sensor_config: SensorConfig,
     mut motion_int: Input<'static>,
 ) {
-    info!("Starting motion detection");
+    info!("Starting motion reading");
     info!("Waiting for motion detection interrupt or READ signal");
 
     loop {
@@ -100,7 +100,7 @@ async fn run_read_window(sensor: &mut Sensor<'_>, sensor_config: &mut SensorConf
         duration_s,
         if manual { "READ" } else { "INT" }
     );
-    BLINK_INTERVAL_MS.signal(10);
+    LED_STATE.signal(LedState::Reading);
 
     let mut start = Instant::now();
     while Instant::now() - start < Duration::from_secs(duration_s) {
@@ -142,7 +142,7 @@ async fn run_read_window(sensor: &mut Sensor<'_>, sensor_config: &mut SensorConf
                     *EPOCH.lock().await = now_ms;
                     info!("Epoch marked manually");
                     // Optional: also force a UI blink/buzz change:
-                    // BLINK_INTERVAL_MS.signal(10);
+                    // LED_STATE.signal(10);
                 }
             }
         } else {
@@ -154,7 +154,7 @@ async fn run_read_window(sensor: &mut Sensor<'_>, sensor_config: &mut SensorConf
     }
 
     info!("No more motion detected");
-    BLINK_INTERVAL_MS.signal(1000);
+    LED_STATE.signal(LedState::Ready);
     BUZZ_FREQUENCY.signal(0.0); // Stop buzzer
 }
 

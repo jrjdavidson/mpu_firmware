@@ -1,41 +1,131 @@
-use crate::shared::BLINK_INTERVAL_MS;
+use crate::shared::LED_STATE;
 use embassy_futures::select::{select, Either};
 use embassy_time::{Duration, Timer};
 use esp_hal::gpio::Output;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum LedState {
+    Ready,
+    Error,
+    Calibrating,
+    Reading,
+    Off,
+}
+pub enum LedPhase {
+    On(Duration),
+    Off(Duration),
+}
+
+pub struct LedPattern {
+    pub phases: &'static [LedPhase],
+    pub repeat: bool,
+}
+
+pub trait LedSignaler {
+    fn signal(&self, state: LedState) -> LedPattern;
+}
+
+pub struct DefaultLedSignaler;
+
+const READY_PHASES: &[LedPhase] = &[
+    LedPhase::On(Duration::from_millis(1000)),
+    LedPhase::Off(Duration::from_millis(1000)),
+];
+const ERROR_PHASES: &[LedPhase] = &[
+    LedPhase::On(Duration::from_millis(100)),
+    LedPhase::Off(Duration::from_millis(100)),
+    LedPhase::On(Duration::from_millis(100)),
+    LedPhase::Off(Duration::from_millis(100)),
+    LedPhase::On(Duration::from_millis(100)),
+    LedPhase::Off(Duration::from_millis(100)),
+    LedPhase::On(Duration::from_millis(100)),
+    LedPhase::Off(Duration::from_millis(100)),
+    LedPhase::On(Duration::from_millis(100)),
+    LedPhase::Off(Duration::from_millis(1100)),
+];
+const CALIBRATING_PHASES: &[LedPhase] = &[
+    LedPhase::On(Duration::from_millis(50)),
+    LedPhase::Off(Duration::from_millis(50)),
+    LedPhase::On(Duration::from_millis(100)),
+    LedPhase::Off(Duration::from_millis(100)),
+    LedPhase::On(Duration::from_millis(50)),
+    LedPhase::Off(Duration::from_millis(200)),
+];
+const READING_PHASES: &[LedPhase] = &[
+    LedPhase::On(Duration::from_millis(200)),
+    LedPhase::Off(Duration::from_millis(200)),
+];
+const OFF_PHASES: &[LedPhase] = &[];
+
+impl LedSignaler for DefaultLedSignaler {
+    fn signal(&self, state: LedState) -> LedPattern {
+        match state {
+            LedState::Ready => LedPattern {
+                phases: READY_PHASES,
+                repeat: true,
+            },
+            LedState::Error => LedPattern {
+                phases: ERROR_PHASES,
+                repeat: true,
+            },
+            LedState::Calibrating => LedPattern {
+                phases: CALIBRATING_PHASES,
+                repeat: true,
+            },
+            LedState::Reading => LedPattern {
+                phases: READING_PHASES,
+                repeat: true,
+            },
+            LedState::Off => LedPattern {
+                phases: OFF_PHASES,
+                repeat: false,
+            },
+        }
+    }
+}
 #[embassy_executor::task]
 pub async fn led_blink_task(mut led: Output<'static>) {
-    // Wait for the initial blink interval to be set via the signal
-    let mut interval = BLINK_INTERVAL_MS.wait().await;
+    let signaler = DefaultLedSignaler;
+    let mut current_state = LED_STATE.wait().await;
+    let mut pattern = signaler.signal(current_state);
+
     loop {
-        // Turn the LED on
-        led.set_high();
+        if pattern.phases.is_empty() {
+            led.set_low();
+            current_state = LED_STATE.wait().await;
+            pattern = signaler.signal(current_state);
+            continue;
+        }
 
-        // Create futures for the timer and for a possible interval change
-        let mut timer_fut = Timer::after(Duration::from_millis(interval));
-        let mut interval_fut = BLINK_INTERVAL_MS.wait();
+        for phase in pattern.phases {
+            let duration = match phase {
+                LedPhase::On(d) => {
+                    led.set_high();
+                    *d
+                }
+                LedPhase::Off(d) => {
+                    led.set_low();
+                    *d
+                }
+            };
 
-        // Wait for either the timer to expire or a new interval to be signaled
-        match select(&mut timer_fut, &mut interval_fut).await {
-            // Timer finished first: turn LED off and repeat the wait for the off period
-            Either::First(_) => {
-                led.set_low();
-                let mut timer_fut = Timer::after(Duration::from_millis(interval));
-                let mut interval_fut = BLINK_INTERVAL_MS.wait();
-                // Again, wait for either the timer or a new interval
-                match select(&mut timer_fut, &mut interval_fut).await {
-                    // Timer finished: do nothing, continue to next loop iteration
-                    Either::First(_) => {}
-                    // New interval received: update and use it for next blink
-                    Either::Second(new_interval) => {
-                        interval = new_interval;
-                    }
+            let mut timer = Timer::after(duration);
+            let mut state_fut = LED_STATE.wait();
+
+            match select(&mut timer, &mut state_fut).await {
+                Either::First(_) => continue,
+                Either::Second(new_state) => {
+                    current_state = new_state;
+                    pattern = signaler.signal(current_state);
+                    break;
                 }
             }
-            // New interval received before timer finished: update and restart loop
-            Either::Second(new_interval) => {
-                interval = new_interval;
-            }
+        }
+
+        if !pattern.repeat {
+            // Wait for a new state if the pattern is not repeating
+            current_state = LED_STATE.wait().await;
+            pattern = signaler.signal(current_state);
         }
     }
 }

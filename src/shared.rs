@@ -8,6 +8,7 @@ use mpu6050_dmp::accel::AccelFullScale;
 use mpu6050_dmp::config::DigitalLowPassFilter;
 use mpu6050_dmp::gyro::GyroFullScale;
 
+use crate::led::LedState;
 use crate::sensor::config::buzzer_config::BuzzFrequencyMode;
 
 #[derive(Debug, Format)]
@@ -80,7 +81,7 @@ pub const DEFAULT_MAX_BUZZ_VALUE: f32 = 2.0;
 pub const DEFAULT_PLAY_SOUND: bool = false;
 
 pub static SENSOR_CHANNEL: Channel<CriticalSectionRawMutex, SensorData, 100> = Channel::new();
-pub static BLINK_INTERVAL_MS: Signal<CriticalSectionRawMutex, u64> = Signal::new();
+pub static LED_STATE: Signal<CriticalSectionRawMutex, LedState> = Signal::new();
 pub static MOTION_SAMPLE_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =
     Mutex::new(DEFAULT_MOTION_SAMPLE_INTERVAL_MS);
 pub static CONTINUOUS_SAMPLE_INTERVAL_MS: Mutex<CriticalSectionRawMutex, u64> =

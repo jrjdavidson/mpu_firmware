@@ -165,11 +165,11 @@ async fn report_motion(sensor: &mut Sensor<'_>, sensor_config: &SensorConfig) {
 
         BUZZ_FREQUENCY.signal(frequency);
         let data = SensorData {
-            accel_scale: sensor_config.accel_scale,
+            accel_scale: sensor_config.accel_scale as u8,
             accel_x: accel.x(),
             accel_y: accel.y(),
             accel_z: accel.z(),
-            gyro_scale: sensor_config.gyro_scale,
+            gyro_scale: sensor_config.gyro_scale as u8,
             gyro_x: gyro.x(),
             gyro_y: gyro.y(),
             gyro_z: gyro.z(),

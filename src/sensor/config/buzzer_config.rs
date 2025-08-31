@@ -1,11 +1,8 @@
 use defmt::Format;
 use micromath::F32Ext;
-use mpu6050_dmp::{
-    accel::{Accel, AccelFullScale},
-    gyro::{Gyro, GyroFullScale},
-};
+use mpu6050_dmp::{accel::Accel, gyro::Gyro};
 
-use crate::sensor::config::{AccelFullScaleFromU8, GyroFullScaleFromU8, SensorConfig};
+use crate::sensor::config::SensorConfig;
 
 #[derive(Clone, Copy, Debug, Format)]
 pub enum BuzzFrequencyMode {
@@ -49,8 +46,8 @@ impl From<BuzzFrequencyMode> for u8 {
 }
 pub fn compute_buzz_frequency(accel: &Accel, gyro: &Gyro, sensor_config: &SensorConfig) -> f32 {
     let mode = sensor_config.buzz_frequency_mode;
-    let accel_scale = AccelFullScale::from_u8(sensor_config.accel_scale).unwrap();
-    let gyro_scale = GyroFullScale::from_u8(sensor_config.gyro_scale).unwrap();
+    let accel_scale = sensor_config.accel_scale;
+    let gyro_scale = sensor_config.gyro_scale;
     match mode.into() {
         BuzzFrequencyMode::AccelX => accel.scaled(accel_scale).x(),
         BuzzFrequencyMode::AccelY => accel.scaled(accel_scale).y(),

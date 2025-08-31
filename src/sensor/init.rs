@@ -1,10 +1,9 @@
 use crate::{
     sensor::{config::SensorConfig, error::SensorInitError, Sensor},
     shared::{
-        ACCEL_SCALE, BUZZ_FREQUENCY_MODE, DEFAULT_ACCEL_SCALE, DEFAULT_BUZZ_FREQUENCY_MODE,
-        DEFAULT_FILTER, DEFAULT_GYRO_SCALE, DEFAULT_MAX_BUZZ_VALUE, DEFAULT_MIN_BUZZ_VALUE,
-        DEFAULT_MOTION_DETECTION, DEFAULT_PLAY_SOUND, FILTER, GYRO_SCALE, MAX_BUZZ_VALUE,
-        MIN_BUZZ_VALUE, MOTION_DETECTION, PLAY_SOUND,
+        ACCEL_SCALE, BUZZ_FREQUENCY_MODE, DEFAULT_MAX_BUZZ_VALUE, DEFAULT_MIN_BUZZ_VALUE,
+        DEFAULT_PLAY_SOUND, FILTER, GYRO_SCALE, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE, MOTION_DETECTION,
+        PLAY_SOUND,
     },
 };
 use defmt::info;
@@ -36,16 +35,19 @@ pub async fn configure_sensor<'a>(
     sensor: &mut Mpu6050<I2c<'a, Async>>,
     delay: &mut Delay,
 ) -> Result<SensorConfig, SensorInitError<'a>> {
-    FILTER.signal(DEFAULT_FILTER as u8);
+    let default_config = SensorConfig::default();
+    FILTER.signal(default_config.filter);
     // Configure DLPF for maximum sensitivity
-    sensor.set_digital_lowpass_filter(DEFAULT_FILTER).await?;
+    sensor
+        .set_digital_lowpass_filter(default_config.filter)
+        .await?;
     // sensor.initialize_dmp(delay).await?;
-    ACCEL_SCALE.signal(DEFAULT_ACCEL_SCALE as u8);
-    GYRO_SCALE.signal(DEFAULT_GYRO_SCALE as u8);
+    ACCEL_SCALE.signal(default_config.accel_scale);
+    GYRO_SCALE.signal(default_config.gyro_scale);
     // Configure calibration parameters
     let calibration_params = CalibrationParameters::new(
-        DEFAULT_ACCEL_SCALE,
-        DEFAULT_GYRO_SCALE,
+        default_config.accel_scale,
+        default_config.gyro_scale,
         mpu6050_dmp::calibration::ReferenceGravity::Zero,
     );
 
@@ -53,7 +55,7 @@ pub async fn configure_sensor<'a>(
     sensor.calibrate(delay, &calibration_params).await?;
 
     info!("Sensor Calibrated");
-    MOTION_DETECTION.signal(DEFAULT_MOTION_DETECTION);
+    MOTION_DETECTION.signal(default_config.motion_detection); //TODO: persist after restart?
     let motion_config = MotionConfig {
         threshold: 2,
         duration: 10,
@@ -61,7 +63,7 @@ pub async fn configure_sensor<'a>(
     sensor.configure_motion_detection(&motion_config).await?;
     sensor.enable_motion_interrupt().await?;
     // Configure motion detection with maximum sensitivity
-    BUZZ_FREQUENCY_MODE.signal(DEFAULT_BUZZ_FREQUENCY_MODE as u8); //TODO: persist after restart?
+    BUZZ_FREQUENCY_MODE.signal(default_config.buzz_frequency_mode); //TODO: persist after restart?
 
     // Set default min/max buzz values
     // These values will be read in the buzzer module, but are initialized here for conistency.

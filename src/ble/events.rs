@@ -2,10 +2,10 @@ use defmt::{info, warn};
 use trouble_host::prelude::*;
 
 use super::gatt::Server;
+use crate::sensor::config::signal_new_config;
 use crate::shared::{
-    ACCEL_SCALE, BUZZ_FREQUENCY_MODE, CONTINUOUS_SAMPLE_INTERVAL_MS, FILTER, GYRO_SCALE,
-    MARK_EPOCH, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE, MOTION_DETECTION, MOTION_READ_DURATION_S,
-    MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, READ,
+    CONTINUOUS_SAMPLE_INTERVAL_MS, MARK_EPOCH, MAX_BUZZ_VALUE, MIN_BUZZ_VALUE,
+    MOTION_READ_DURATION_S, MOTION_SAMPLE_INTERVAL_MS, PLAY_SOUND, READ,
 };
 use crate::{define_async_write_handler, define_write_handler};
 /// Stream Events until the connection closes.
@@ -19,15 +19,11 @@ pub async fn gatt_events_task<P: PacketPool>(
     let motion_sample_interval = &server.imu_service.motion_sample_interval;
     let continuous_sample_interval = &server.imu_service.continuous_sample_interval;
     let play_sound = &server.imu_service.play_sound;
-    let accel_scale = &server.imu_service.accel_scale;
-    let gyro_scale = &server.imu_service.gyro_scale;
-    let buzz_frequency_mode = &server.imu_service.buzz_frequency_mode;
     let min_buzz_value = &server.imu_service.min_buzz_value;
     let max_buzz_value = &server.imu_service.max_buzz_value;
-    let digital_low_pass_filter = &server.imu_service.digital_low_pass_filter;
     let read = &server.imu_service.read;
     let mark_epoch = &server.imu_service.mark_epoch;
-    let motion_detection = &server.imu_service.motion_detection;
+    let sensor_config = &server.imu_service.sensor_config;
 
     let reason = loop {
         match conn.next().await {
@@ -60,33 +56,14 @@ pub async fn gatt_events_task<P: PacketPool>(
                         h if h == play_sound.handle => {
                             handle_u8_write(event.data(), |value| PLAY_SOUND.signal(value != 0));
                         }
-                        h if h == gyro_scale.handle => {
-                            handle_u8_write(event.data(), |value| GYRO_SCALE.signal(value));
-                        }
-                        h if h == accel_scale.handle => {
-                            handle_u8_write(event.data(), |value| ACCEL_SCALE.signal(value));
-                        }
-                        h if h == buzz_frequency_mode.handle => {
-                            handle_u8_write(event.data(), |value| {
-                                BUZZ_FREQUENCY_MODE.signal(value.into())
-                            });
-                        }
                         h if h == min_buzz_value.handle => {
                             handle_f32_write(event.data(), |value| MIN_BUZZ_VALUE.signal(value));
                         }
                         h if h == max_buzz_value.handle => {
                             handle_f32_write(event.data(), |value| MAX_BUZZ_VALUE.signal(value));
                         }
-                        h if h == digital_low_pass_filter.handle => {
-                            handle_u8_write(event.data(), |value| FILTER.signal(value));
-                        }
                         h if h == read.handle => {
                             handle_u8_write(event.data(), |value| READ.signal(value != 0));
-                        }
-                        h if h == motion_detection.handle => {
-                            handle_u8_write(event.data(), |value| {
-                                MOTION_DETECTION.signal(value != 0)
-                            });
                         }
                         h if h == mark_epoch.handle => {
                             handle_u8_write(event.data(), |value| {
@@ -94,6 +71,19 @@ pub async fn gatt_events_task<P: PacketPool>(
                                     MARK_EPOCH.signal(())
                                 }
                             });
+                        }
+                        h if h == sensor_config.handle => {
+                            let data = event.data();
+                            let result = data.try_into();
+                            if let Ok(arr) = result {
+                                let packet: [u8; 5] = arr; // need this step to tell what the type is
+                                signal_new_config(packet.into());
+                            } else {
+                                warn!(
+                                    "[gatt] invalid sensor_config length: {}",
+                                    event.data().len()
+                                );
+                            }
                         }
                         _ => {}
                     },

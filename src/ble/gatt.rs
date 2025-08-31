@@ -1,11 +1,12 @@
 use heapless::Vec;
 use trouble_host::prelude::*;
 
-use crate::shared::{
-    DEFAULT_ACCEL_SCALE, DEFAULT_BUZZ_FREQUENCY_MODE, DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS,
-    DEFAULT_FILTER, DEFAULT_GYRO_SCALE, DEFAULT_MAX_BUZZ_VALUE, DEFAULT_MIN_BUZZ_VALUE,
-    DEFAULT_MOTION_DETECTION, DEFAULT_MOTION_READ_DURATION_S, DEFAULT_MOTION_SAMPLE_INTERVAL_MS,
-    DEFAULT_PLAY_SOUND,
+use crate::{
+    sensor::config::SensorConfig,
+    shared::{
+        DEFAULT_CONTINUOUS_SAMPLE_INTERVAL_MS, DEFAULT_MAX_BUZZ_VALUE, DEFAULT_MIN_BUZZ_VALUE,
+        DEFAULT_MOTION_READ_DURATION_S, DEFAULT_MOTION_SAMPLE_INTERVAL_MS, DEFAULT_PLAY_SOUND,
+    },
 };
 
 /// GATT Server definition
@@ -68,36 +69,11 @@ pub struct MyService {
         value = DEFAULT_MOTION_SAMPLE_INTERVAL_MS
     )]
     pub motion_sample_interval: u64,
-
-    #[characteristic(
-        uuid = "12345678-1234-5678-1234-56789abcdef7",
-        write,
-        read,
-        value = DEFAULT_ACCEL_SCALE as u8
-    )]
-    pub accel_scale: u8,
-
-    #[characteristic(
-        uuid = "12345678-1234-5678-1234-56789abcdef8",
-        write,
-        read,
-        value = DEFAULT_GYRO_SCALE as u8
-    )]
-    pub gyro_scale: u8,
-
-    #[characteristic(
-        uuid = "12345678-1234-5678-1234-56789abcdef9",
-        write,
-        read,
-        value = DEFAULT_BUZZ_FREQUENCY_MODE as u8
-    )]
-    pub buzz_frequency_mode: u8,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefa", write, read, value = DEFAULT_MIN_BUZZ_VALUE)]
     pub min_buzz_value: f32,
     #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefb", write, read, value = DEFAULT_MAX_BUZZ_VALUE)]
     pub max_buzz_value: f32,
-    #[characteristic(uuid = "12345678-1234-5678-1234-56789abcdefc", write, read, value = DEFAULT_FILTER as u8)]
-    pub digital_low_pass_filter: u8,
+
     #[characteristic(
         uuid = "12345678-1234-5678-1234-56789abcdefd",
         write,
@@ -113,10 +89,10 @@ pub struct MyService {
     )]
     pub mark_epoch: bool,
     #[characteristic(
-        uuid = "12345678-1234-5678-1234-56789abcdff0",
-        write,
-        read,
-        value = DEFAULT_MOTION_DETECTION
-    )]
-    pub motion_detection: bool,
+    uuid = "12345678-1234-5678-1234-56789abcdef1",
+    write,
+    read,
+    value = SensorConfig::default().into()
+)]
+    pub sensor_config: [u8; 5],
 }

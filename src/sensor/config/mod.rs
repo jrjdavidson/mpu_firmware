@@ -163,24 +163,6 @@ pub async fn update_sensor_settings<'a>(sensor: &mut Sensor<'a>, sensor_config: 
 }
 // could be rewritten as a single signal of type SENSORCONFIGPACKET, and apply all at once?
 
-pub struct SensorConfigPacket {
-    pub accel_scale: u8,
-    pub gyro_scale: u8,
-    pub buzz_frequency_mode: u8,
-    pub filter: u8,
-    pub motion_detection: u8, // use 0 = false, 1 = true
-}
-impl From<[u8; 5]> for SensorConfigPacket {
-    fn from(bytes: [u8; 5]) -> Self {
-        Self {
-            accel_scale: bytes[0],
-            gyro_scale: bytes[1],
-            buzz_frequency_mode: bytes[2],
-            filter: bytes[3],
-            motion_detection: bytes[4],
-        }
-    }
-}
 impl Default for SensorConfig {
     fn default() -> Self {
         Self {
@@ -191,18 +173,4 @@ impl Default for SensorConfig {
             motion_detection: DEFAULT_MOTION_DETECTION,
         }
     }
-}
-
-pub fn signal_new_config(packet: SensorConfigPacket) {
-    if let Some(accel_scale) = AccelFullScale::from_u8(packet.accel_scale) {
-        ACCEL_SCALE.signal(accel_scale);
-    }
-    if let Some(gyro_scale) = GyroFullScale::from_u8(packet.gyro_scale) {
-        GYRO_SCALE.signal(gyro_scale);
-    }
-    BUZZ_FREQUENCY_MODE.signal(packet.buzz_frequency_mode.into());
-    if let Some(filter) = DigitalLowPassFilter::from_u8(packet.filter) {
-        FILTER.signal(filter);
-    }
-    MOTION_DETECTION.signal(packet.motion_detection != 0);
 }
